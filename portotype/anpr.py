@@ -711,22 +711,22 @@ def scan_frame_for_plates(frame):
             # Only keep tokens that look like plate tokens (short, high conf)
             plate_tokens = [(box, txt, c) for box, txt, c in raw_results
                             if c >= 0.40 and 2 <= len(txt.replace(' ', '')) <= 6]
-        if len(plate_tokens) >= 2:
-            sorted_res = sorted(plate_tokens, key=lambda x: x[0][0][0])
-            combined = " ".join([t for _, t, _ in sorted_res])
-            avg_conf = float(sum(c for _, _, c in sorted_res) / len(sorted_res))
-            full_plate = extract_indian_plate_from_string(combined) or post_process(combined)
-            if full_plate and full_plate not in found_plates_set:
-                found_plates_set.add(full_plate)
-                res3 = _sequence_fusion.add_frame_observation(
-                    abs(hash(full_plate[:4])) % 10000, frame, full_plate, avg_conf, telemetry)
-                p_color, p_cat = classify_plate_color_and_category(frame)
-                detections.append({
-                    "plate": res3[0], "confidence": res3[1],
-                    "vehicle_type": "Car", "bbox": (0, 0, w, h),
-                    "plate_bbox": (0, 0, w, h), "voting_details": res3[2], "telemetry": telemetry,
-                    "plate_color": p_color, "category": p_cat, "violation": "NONE"
-                })
+            if len(plate_tokens) >= 2:
+                sorted_res = sorted(plate_tokens, key=lambda x: x[0][0][0])
+                combined = " ".join([t for _, t, _ in sorted_res])
+                avg_conf = float(sum(c for _, _, c in sorted_res) / len(sorted_res))
+                full_plate = extract_indian_plate_from_string(combined) or post_process(combined)
+                if full_plate and full_plate not in found_plates_set:
+                    found_plates_set.add(full_plate)
+                    res3 = _sequence_fusion.add_frame_observation(
+                        abs(hash(full_plate[:4])) % 10000, frame, full_plate, avg_conf, telemetry)
+                    p_color, p_cat = classify_plate_color_and_category(frame)
+                    detections.append({
+                        "plate": res3[0], "confidence": res3[1],
+                        "vehicle_type": "Car", "bbox": (0, 0, w, h),
+                        "plate_bbox": (0, 0, w, h), "voting_details": res3[2], "telemetry": telemetry,
+                        "plate_color": p_color, "category": p_cat, "violation": "NONE"
+                    })
 
     return detections
 

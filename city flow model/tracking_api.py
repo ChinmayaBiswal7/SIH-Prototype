@@ -347,43 +347,6 @@ def register_tracking_routes(app):
                 }
             }]
 
-        elif has_plate_struct:
-            # Physical plate detected on vehicle bumper (e.g. TN87C5106 on Hyundai)
-            plate_cand = "TN87C5106"
-            if plate_crop is not None:
-                try:
-                    import pytesseract
-                    t_txt = pytesseract.image_to_string(plate_crop, config='--psm 7')
-                    m = re.search(r'[A-Za-z]{2}[0-9]{1,2}[A-Za-z]{0,3}[0-9]{3,4}', t_txt)
-                    if m:
-                        plate_cand = m.group(0).upper()
-                except Exception:
-                    pass
-
-            v_rto = {}
-            try:
-                import rto
-                v_rto = rto.lookup_rto_vehicle(plate_cand)
-            except Exception:
-                pass
-
-            plates_found = [{
-                "plate": plate_cand,
-                "confidence": 0.97,
-                "vehicle_type": f"{v_rto.get('vehicle_maker', 'Hyundai')} {v_rto.get('vehicle_model', 'i20 N-Line')}",
-                "plate_color": "WHITE",
-                "category": "Private Vehicle",
-                "violation": "NONE",
-                "environmental_condition": "NORMAL",
-                "quality_score": 0.95,
-                "vahan_details": v_rto,
-                "ghost_info": None,
-                "voting_details": {
-                    "frames_analyzed": 4,
-                    "consensus_ratio": 0.97,
-                    "confidence_boost": "+8.4% (Multi-Pass Optical Consensus)"
-                }
-            }]
 
         else:
             # THIS IS AN UNPLATED SUSPECT VEHICLE (MISSING OR COVERED PLATE)!

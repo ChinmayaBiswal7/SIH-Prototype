@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import "./PortalSelector.css";
 
 export default function PortalSelector({ onSelectPortal, currentUser, onLogout }) {
@@ -22,17 +22,6 @@ export default function PortalSelector({ onSelectPortal, currentUser, onLogout }
         </div>
 
         <div className="portal-user-section">
-          {currentUser && (
-            <div className="portal-user-badge">
-              <div className="portal-user-avatar">
-                <i className="fas fa-user-shield" />
-              </div>
-              <div className="portal-user-details">
-                <span className="portal-user-name">{currentUser.name}</span>
-                <span className="portal-user-badge-id">{currentUser.badge} • {currentUser.role}</span>
-              </div>
-            </div>
-          )}
           {onLogout && (
             <button className="portal-logout-btn" onClick={onLogout} title="Sign out of system">
               <i className="fas fa-arrow-right-from-bracket" />
@@ -41,6 +30,7 @@ export default function PortalSelector({ onSelectPortal, currentUser, onLogout }
           )}
         </div>
       </header>
+
 
       {/* Main Module Selection Area */}
       <main className="portal-main">

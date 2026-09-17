@@ -37,18 +37,8 @@ export default function TopBar({ currentView, intersection, stats, currentUser, 
             <span>Command Hub</span>
           </button>
         )}
-        {currentUser && (
-          <div className="tb-user-badge" title={`${currentUser.name} (${currentUser.role})`}>
-            <div className="tb-user-avatar">
-              <i className="fas fa-user-shield" />
-            </div>
-            <div className="tb-user-info">
-              <span className="tb-user-name">{currentUser.name}</span>
-              <span className="tb-user-role">{currentUser.badge}</span>
-            </div>
-          </div>
-        )}
         <div className="tb-pill">
+
           <span className="tb-pill-label">Congestion</span>
           <span className={`tb-pill-val ${congColor}`}>{stats.avgCongestion}%</span>
         </div>

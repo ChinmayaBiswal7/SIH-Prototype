@@ -155,11 +155,37 @@ def init_db():
     c.execute("CREATE INDEX IF NOT EXISTS idx_ghost_ts ON ghost_sightings(timestamp)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_ghost_prof_ts ON ghost_profiles(last_seen_ts)")
 
+    # Seed all default Bhubaneswar Smart City Cameras if not present
+    default_cameras = [
+        ("CAM_01", "Bhubaneswar Railway Station", "Station Road", 20.2640, 85.8354, "Central"),
+        ("CAM_02", "Master Canteen Square", "MG Road", 20.2683, 85.8316, "Central"),
+        ("CAM_03", "Vani Vihar", "Vani Vihar Road", 20.2961, 85.8245, "North"),
+        ("CAM_04", "Patia Square", "NH-16", 20.3516, 85.8189, "North"),
+        ("CAM_05", "Infocity Entrance", "Infocity Road", 20.3587, 85.8149, "North"),
+        ("CAM_06", "Rasulgarh Overbridge", "Ring Road", 20.2795, 85.8702, "East"),
+        ("CAM_07", "Jaydev Vihar Square", "Jaydev Vihar Road", 20.3051, 85.8148, "West"),
+        ("CAM_08", "Khandagiri Square", "NH-57", 20.2524, 85.7796, "West"),
+        ("CAM_LIVE", "Live CCTV Edge Node", "Station Road", 20.2640, 85.8354, "Central"),
+    ]
+    for cam in default_cameras:
+        c.execute("INSERT OR REPLACE INTO cameras (id, name, road, lat, lon, area) VALUES (?,?,?,?,?,?)", cam)
+
     conn.commit()
     conn.close()
-    print("Database initialised:", DB_PATH)
+    print("Database initialised with 8 connected Bhubaneswar Smart City cameras:", DB_PATH)
 
 
+CAM_FALLBACKS = {
+    "CAM_01": {"name": "Bhubaneswar Railway Station", "road": "Station Road", "lat": 20.2640, "lon": 85.8354, "area": "Central"},
+    "CAM_02": {"name": "Master Canteen Square", "road": "MG Road", "lat": 20.2683, "lon": 85.8316, "area": "Central"},
+    "CAM_03": {"name": "Vani Vihar", "road": "Vani Vihar Road", "lat": 20.2961, "lon": 85.8245, "area": "North"},
+    "CAM_04": {"name": "Patia Square", "road": "NH-16", "lat": 20.3516, "lon": 85.8189, "area": "North"},
+    "CAM_05": {"name": "Infocity Entrance", "road": "Infocity Road", "lat": 20.3587, "lon": 85.8149, "area": "North"},
+    "CAM_06": {"name": "Rasulgarh Overbridge", "road": "Ring Road", "lat": 20.2795, "lon": 85.8702, "area": "East"},
+    "CAM_07": {"name": "Jaydev Vihar Square", "road": "Jaydev Vihar Road", "lat": 20.3051, "lon": 85.8148, "area": "West"},
+    "CAM_08": {"name": "Khandagiri Square", "road": "NH-57", "lat": 20.2524, "lon": 85.7796, "area": "West"},
+    "CAM_LIVE": {"name": "Live CCTV Edge Node", "road": "Station Road", "lat": 20.2640, "lon": 85.8354, "area": "Central"},
+}
 
 # --- Camera helpers ---
 
@@ -176,7 +202,11 @@ def get_all_cameras():
     conn = get_conn()
     rows = conn.execute("SELECT * FROM cameras ORDER BY id").fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    res = [dict(r) for r in rows]
+    if not res:
+        for c_id, c_info in CAM_FALLBACKS.items():
+            res.append({"id": c_id, "name": c_info["name"], "road": c_info["road"], "lat": c_info["lat"], "lon": c_info["lon"], "area": c_info["area"]})
+    return res
 
 
 # --- Detection helpers ---
@@ -186,6 +216,13 @@ def insert_detection(plate, camera_id, timestamp, confidence=0.0,
                      direction="", vehicle_type="unknown", image_path="", voting_data="",
                      env_condition="NORMAL", quality_score=0.85,
                      plate_color="WHITE", category="Private Vehicle", violation="NONE"):
+    # Ensure coordinates are set from camera metadata if not provided
+    cam_meta = CAM_FALLBACKS.get(camera_id, {})
+    if lat is None:
+        lat = cam_meta.get("lat")
+    if lon is None:
+        lon = cam_meta.get("lon")
+
     conn = get_conn()
     conn.execute("""
         INSERT INTO detections
@@ -218,7 +255,20 @@ def get_trajectory(plate):
         ORDER BY d.timestamp ASC
     """, (clean_p,)).fetchall()
     conn.close()
-    results = [dict(r) for r in rows]
+
+    results = []
+    for r in rows:
+        item = dict(r)
+        cid = item.get("camera_id", "CAM_01")
+        meta = CAM_FALLBACKS.get(cid, {})
+        if not item.get("cam_lat") or not item.get("cam_lon"):
+            item["cam_lat"] = item.get("lat") or meta.get("lat", 20.2961)
+            item["cam_lon"] = item.get("lon") or meta.get("lon", 85.8245)
+        if not item.get("camera_name"):
+            item["camera_name"] = meta.get("name", cid)
+        if not item.get("road"):
+            item["road"] = meta.get("road", "Main Road")
+        results.append(item)
 
     # Cloud fallback: if local container has no history, pull full journey from Firebase Firestore
     if not results:
@@ -227,14 +277,16 @@ def get_trajectory(plate):
             fb_doc = firebase_sync.fetch_vehicle_plate(clean_p)
             if fb_doc and "sightings" in fb_doc:
                 for s in fb_doc["sightings"]:
+                    cid = s.get("camera_id", "CAM_01")
+                    meta = CAM_FALLBACKS.get(cid, {})
                     results.append({
                         "plate": clean_p,
-                        "camera_id": s.get("camera_id", "CAM_01"),
-                        "camera_name": s.get("camera_name", "City Camera"),
-                        "road": s.get("road", "Main Road"),
-                        "area": "Bhubaneswar",
-                        "cam_lat": s.get("lat", 20.2961),
-                        "cam_lon": s.get("lon", 85.8245),
+                        "camera_id": cid,
+                        "camera_name": s.get("camera_name") or meta.get("name", cid),
+                        "road": s.get("road") or meta.get("road", "Main Road"),
+                        "area": meta.get("area", "Bhubaneswar"),
+                        "cam_lat": float(s.get("lat") or meta.get("lat", 20.2961)),
+                        "cam_lon": float(s.get("lon") or meta.get("lon", 85.8245)),
                         "timestamp": s.get("timestamp", ""),
                         "speed_kmph": float(s.get("speed_kmph", 40.0)),
                         "confidence": float(s.get("confidence", 0.95)),
@@ -246,6 +298,7 @@ def get_trajectory(plate):
             pass
 
     return results
+
 
 
 

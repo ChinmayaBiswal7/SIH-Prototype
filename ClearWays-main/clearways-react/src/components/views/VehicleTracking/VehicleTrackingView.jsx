@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import "./VehicleTrackingView.css";
 
 export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLogout, currentUser }) {
@@ -112,13 +112,6 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLo
             </button>
           )}
 
-          {currentUser && (
-            <div className="vt-user-badge" title={`${currentUser.name} (${currentUser.role})`}>
-              <i className="fas fa-user-shield" />
-              <span>{currentUser.badge}</span>
-            </div>
-          )}
-
           {onLogout && (
             <button className="vt-btn vt-logout-btn" onClick={onLogout} title="Sign Out">
               <i className="fas fa-arrow-right-from-bracket" />
@@ -126,6 +119,7 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLo
           )}
         </div>
       </header>
+
 
       {/* Tab Viewports */}
       <div className="vt-viewport">

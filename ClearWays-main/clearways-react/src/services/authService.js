@@ -20,8 +20,17 @@ export const AUTHORIZED_TEAM_MEMBERS = [
     role: "Traffic Systems Engineer",
     badge: "KIIT-02",
     department: "AI Emergency Routing Unit"
+  },
+  {
+    email: "24051479@kiit.ac.in",
+    password: "ayush_616",
+    name: "Officer 24051479",
+    role: "Traffic Surveillance Analyst",
+    badge: "KIIT-03",
+    department: "Citywide ANPR Intelligence"
   }
 ];
+
 
 /**
  * Authenticate team member credentials with smart typo tolerance

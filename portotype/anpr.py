@@ -636,29 +636,54 @@ def scan_frame_for_plates(frame):
         found_plates_set.add(plate1)
         res = _sequence_fusion.add_frame_observation(
             abs(hash(plate1[:4])) % 10000, frame, plate1, conf1, telemetry)
+        p_color, p_cat = classify_plate_color_and_category(frame)
         detections.append({
             "plate": res[0], "confidence": res[1],
             "vehicle_type": "Car", "bbox": (0, 0, w, h),
-            "plate_bbox": (0, 0, w, h), "voting_details": res[2], "telemetry": telemetry
+            "plate_bbox": (0, 0, w, h), "voting_details": res[2], "telemetry": telemetry,
+            "plate_color": p_color, "category": p_cat, "violation": "NONE"
         })
 
-    # ── Strategy 2: Center-ROI crop (30%–80% of image) ────────────────
-    cy1, cy2 = int(h * 0.20), int(h * 0.85)
-    cx1, cx2 = int(w * 0.05), int(w * 0.95)
-    center_crop = frame[cy1:cy2, cx1:cx2]
-    if center_crop.size > 0:
-        plate2, conf2 = multi_pass_ocr_on_plate(center_crop, max_passes=4)
-        if plate2 and plate2 not in found_plates_set:
-            found_plates_set.add(plate2)
-            res2 = _sequence_fusion.add_frame_observation(
-                abs(hash(plate2[:4])) % 10000, center_crop, plate2, conf2, telemetry)
-            detections.append({
-                "plate": res2[0], "confidence": res2[1],
-                "vehicle_type": "Car", "bbox": (cx1, cy1, cx2, cy2),
-                "plate_bbox": (cx1, cy1, cx2, cy2), "voting_details": res2[2], "telemetry": telemetry
-            })
+    # ── Strategy 2: Bumper Plate Region Localization (only if Strategy 1 found nothing) ──
+    if not detections:
+        try:
+            plate_crop = find_plate_region_in_crop(frame)
+            if plate_crop is not None and plate_crop.size > 0:
+                p_reg, c_reg = multi_pass_ocr_on_plate(plate_crop, max_passes=4)
+                if p_reg and p_reg not in found_plates_set:
+                    found_plates_set.add(p_reg)
+                    res_reg = _sequence_fusion.add_frame_observation(
+                        abs(hash(p_reg[:4])) % 10000, plate_crop, p_reg, c_reg, telemetry)
+                    p_color, p_cat = classify_plate_color_and_category(plate_crop)
+                    detections.append({
+                        "plate": res_reg[0], "confidence": res_reg[1],
+                        "vehicle_type": "Car", "bbox": (0, 0, w, h),
+                        "plate_bbox": (0, 0, w, h), "voting_details": res_reg[2], "telemetry": telemetry,
+                        "plate_color": p_color, "category": p_cat, "violation": "NONE"
+                    })
+        except Exception:
+            pass
 
-    # ── Strategy 3: Raw EasyOCR fallback (long plates in complex scenes) ──
+    # ── Strategy 3: Center-ROI crop (only if Strategies 1 & 2 found nothing) ────
+    if not detections:
+        cy1, cy2 = int(h * 0.20), int(h * 0.85)
+        cx1, cx2 = int(w * 0.05), int(w * 0.95)
+        center_crop = frame[cy1:cy2, cx1:cx2]
+        if center_crop.size > 0:
+            plate2, conf2 = multi_pass_ocr_on_plate(center_crop, max_passes=4)
+            if plate2 and plate2 not in found_plates_set:
+                found_plates_set.add(plate2)
+                res2 = _sequence_fusion.add_frame_observation(
+                    abs(hash(plate2[:4])) % 10000, center_crop, plate2, conf2, telemetry)
+                p_color, p_cat = classify_plate_color_and_category(center_crop)
+                detections.append({
+                    "plate": res2[0], "confidence": res2[1],
+                    "vehicle_type": "Car", "bbox": (cx1, cy1, cx2, cy2),
+                    "plate_bbox": (cx1, cy1, cx2, cy2), "voting_details": res2[2], "telemetry": telemetry,
+                    "plate_color": p_color, "category": p_cat, "violation": "NONE"
+                })
+
+    # ── Strategy 4: Raw EasyOCR fallback (long plates in complex scenes) ──
     if not detections:
         proc = frame if w <= 640 else cv2.resize(frame, (640, int(h * 640.0 / w)))
         restored = enhancer.restore_image(proc, telemetry)
@@ -677,10 +702,12 @@ def scan_frame_for_plates(frame):
                 found_plates_set.add(full_plate)
                 res3 = _sequence_fusion.add_frame_observation(
                     abs(hash(full_plate[:4])) % 10000, frame, full_plate, avg_conf, telemetry)
+                p_color, p_cat = classify_plate_color_and_category(frame)
                 detections.append({
                     "plate": res3[0], "confidence": res3[1],
                     "vehicle_type": "Car", "bbox": (0, 0, w, h),
-                    "plate_bbox": (0, 0, w, h), "voting_details": res3[2], "telemetry": telemetry
+                    "plate_bbox": (0, 0, w, h), "voting_details": res3[2], "telemetry": telemetry,
+                    "plate_color": p_color, "category": p_cat, "violation": "NONE"
                 })
 
     return detections

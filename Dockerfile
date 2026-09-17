@@ -13,8 +13,14 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Install system dependencies (including ffmpeg, glib for OpenCV, and tesseract)
+RUN apt-get update && apt-get install -y --no-install-recommends curl ffmpeg libglib2.0-0 libgomp1 tesseract-ocr libtesseract-dev && rm -rf /var/lib/apt/lists/*
+
+# Install lightweight CPU-only PyTorch & Torchvision (~150MB instead of 900MB GPU torch)
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Install EasyOCR and pytesseract
+RUN pip install --no-cache-dir easyocr pytesseract
 
 # Install Python requirements (JSON array syntax handles spaces cleanly)
 COPY ["city flow model/requirements.txt", "./"]

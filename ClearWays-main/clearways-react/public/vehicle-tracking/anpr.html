@@ -619,42 +619,72 @@ async function uploadVideoFile(input){
   await stopWebcamIfActive();
 
   const file = input.files[0];
+  if(file.size > 80 * 1024 * 1024){
+    alert('File size is ' + (file.size / (1024*1024)).toFixed(1) + 'MB. For fast processing on Render, please select a video under 50MB.');
+  }
+
   const fd = new FormData();
   fd.append('file', file);
 
   const ph = document.getElementById('placeholder');
-  ph.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><div id="vid-progress-label">Uploading video...</div>';
+  ph.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><div id="vid-progress-label">Uploading video... 0%</div>';
   ph.style.display = 'flex';
   const img = document.getElementById('live-img');
   img.style.display = 'none';
   img.src = '';
 
-  try{
-    // Step 1: Submit upload — server returns job_id immediately (HTTP 202)
-    const initRes = await fetch(API + '/api/anpr/upload_video', {method:'POST', body:fd});
-    const initData = await initRes.json();
+  const label = document.getElementById('vid-progress-label');
+
+  // Step 1: Upload with real-time XHR progress tracking
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', API + '/api/anpr/upload_video', true);
+
+  xhr.upload.onprogress = (e) => {
+    if(e.lengthComputable){
+      const pct = Math.round((e.loaded / e.total) * 100);
+      const loadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+      const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+      if(label) label.textContent = `Uploading video... ${pct}% (${loadedMB} MB / ${totalMB} MB)`;
+    }
+  };
+
+  xhr.onload = async () => {
+    if(xhr.status !== 200 && xhr.status !== 202){
+      alert('Upload failed (HTTP ' + xhr.status + '). Server may have rejected the file size. Please try a smaller video clip.');
+      resetPlaceholder();
+      return;
+    }
+
+    let initData = {};
+    try {
+      initData = JSON.parse(xhr.responseText);
+    } catch(err){
+      alert('Upload parse error: ' + xhr.responseText.substring(0, 100));
+      resetPlaceholder();
+      return;
+    }
 
     if(!initData.job_id){
-      alert('Upload failed: ' + (initData.error || 'Unknown error'));
+      alert('Upload error: ' + (initData.error || 'No job ID received'));
       resetPlaceholder();
       return;
     }
 
     const jobId = initData.job_id;
-    const label = document.getElementById('vid-progress-label');
+    if(label) label.textContent = 'Analyzing video keyframes with Neural ANPR...';
 
+    // Step 2: Poll status every 800ms
     let pollFailures = 0;
-    // Step 2: Poll every 1.5 seconds until done or error
     const pollInterval = setInterval(async () => {
       try{
         const pollRes = await fetch(API + '/api/anpr/video_poll/' + jobId);
         if(!pollRes.ok) throw new Error('HTTP ' + pollRes.status);
         const poll = await pollRes.json();
-        pollFailures = 0; // Reset on success
+        pollFailures = 0;
 
         if(poll.status === 'processing'){
           const pct = poll.progress || 0;
-          if(label) label.textContent = `Analysing video frames with Edge AI... ${pct}%`;
+          if(label) label.textContent = `Analyzing video frames with Edge AI... ${pct}%`;
         } else if(poll.status === 'done'){
           clearInterval(pollInterval);
           if(poll.detections && poll.detections.length){
@@ -663,10 +693,11 @@ async function uploadVideoFile(input){
             document.getElementById('card-count').textContent = liveDetectionsList.length + ' Detected';
             document.getElementById('placeholder').style.display = 'none';
             const img = document.getElementById('live-img');
-            img.src = API + '/api/video_feed?t=' + Date.now();
+            const snapUrl = (poll.detections[0] && poll.detections[0].image_path) ? API + poll.detections[0].image_path : (API + '/api/video_feed?t=' + Date.now());
+            img.src = snapUrl;
             img.style.display = 'block';
           } else {
-            alert('Video processed: No clear license plates detected in video.\nTip: Use videos where plate is visible in frame.');
+            alert('Video processed: No license plates detected in video frames.\nTip: Upload a front/rear camera clip showing vehicle plates.');
             resetPlaceholder();
           }
         } else if(poll.status === 'error'){
@@ -676,19 +707,21 @@ async function uploadVideoFile(input){
         }
       }catch(pollErr){
         pollFailures++;
-        if(pollFailures >= 6){ // Only alert after 6 consecutive failures
+        if(pollFailures >= 8){
           clearInterval(pollInterval);
           alert('Video poll error: ' + pollErr.message);
           resetPlaceholder();
         }
       }
-    }, 1500);
+    }, 800);
+  };
 
-
-  }catch(e){
-    alert('Video upload error: ' + e.message);
+  xhr.onerror = () => {
+    alert('Network error while uploading video to server. Please check your connection.');
     resetPlaceholder();
-  }
+  };
+
+  xhr.send(fd);
   input.value = '';
 }
 

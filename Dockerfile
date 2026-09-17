@@ -16,9 +16,9 @@ WORKDIR /app
 # Install system dependencies (including ffmpeg, glib for OpenCV, and lightweight tesseract)
 RUN apt-get update && apt-get install -y --no-install-recommends curl ffmpeg libglib2.0-0 libgomp1 tesseract-ocr libtesseract-dev && rm -rf /var/lib/apt/lists/*
 
-# Install Python requirements (JSON array syntax handles spaces cleanly)
+# Install Python requirements with CPU-only PyTorch (lightweight, no CUDA bloat)
 COPY ["city flow model/requirements.txt", "./"]
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir -r requirements.txt
 
 # Copy CityFlow Backend code
 COPY ["city flow model/", "./cityflow_model/"]

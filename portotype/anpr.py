@@ -155,7 +155,6 @@ def strip_hsrp_ind_prefix(s: str) -> str:
         s = s[3:]
     elif s.startswith("ND") and len(s) >= 10 and (s[2:4] in INDIAN_STATES or _nearest_state_code(s[2:4]) in INDIAN_STATES):
         s = s[2:]
-        s = s[1:]
     return s
 
 

@@ -52,6 +52,31 @@ _anpr_active = False
 _cam_lock = threading.Lock()
 _video_jobs = {}
 _video_jobs_lock = threading.Lock()
+_upload_yolo_model = None
+
+def get_yolo_model():
+    """Initializes and returns cached YOLOv8 vehicle detection model."""
+    global _upload_yolo_model
+    if _upload_yolo_model is None:
+        try:
+            import torch
+            torch.set_num_threads(1)
+            torch.set_grad_enabled(False)
+            from ultralytics import YOLO
+            for ypath in [
+                os.path.join(PORTOTYPE_DIR, "yolov8n.pt"),
+                os.path.join(ROOT_DIR, "portotype", "yolov8n.pt"),
+                "yolov8n.pt"
+            ]:
+                if os.path.exists(ypath):
+                    _upload_yolo_model = YOLO(ypath)
+                    break
+            if _upload_yolo_model is None:
+                _upload_yolo_model = YOLO("yolov8n.pt")
+        except Exception as ye:
+            print(f"[Tracking API] YOLO init note: {ye}")
+            _upload_yolo_model = False
+    return _upload_yolo_model if _upload_yolo_model is not False else None
 
 def detect_vehicle_plate_presence(frame):
     """
@@ -280,9 +305,6 @@ def register_tracking_routes(app):
 
         plates_found = []
         frame = None
-        has_plate_struct = False
-        plate_crop = None
-        plate_bbox = None
 
         try:
             import cv2
@@ -291,11 +313,21 @@ def register_tracking_routes(app):
             np_arr = np.frombuffer(raw_bytes, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             if frame is not None:
-                has_plate_struct, plate_crop, plate_bbox = detect_vehicle_plate_presence(frame)
-                try:
-                    plates_found = anpr_module.scan_frame_for_plates(frame)
-                except Exception as oe:
-                    print(f"[Tracking API] OCR note: {oe}")
+                # 1. Run YOLO to identify vehicle in frame, then ANPR to find plate
+                yolo = get_yolo_model()
+                if yolo is not None:
+                    try:
+                        results = yolo(frame, conf=0.18, verbose=False)
+                        plates_found = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
+                    except Exception as y_err:
+                        print(f"[Tracking API] YOLO inference note: {y_err}")
+
+                # 2. Fallback to direct frame scan if YOLO found zero plates
+                if not plates_found:
+                    try:
+                        plates_found = anpr_module.scan_frame_for_plates(frame)
+                    except Exception as s_err:
+                        print(f"[Tracking API] Scan frame note: {s_err}")
         except Exception as cv_err:
             print(f"[Tracking API] CV2 note: {cv_err}")
 
@@ -304,23 +336,50 @@ def register_tracking_routes(app):
 
         # Clean and prioritize plates
         if plates_found:
-            # Filter valid Indian plates first if any exist
-            valid_indian = [p for p in plates_found if re.search(r'^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{3,4}$', p.get("plate", "").replace(" ", ""))]
-            if valid_indian:
-                plates_found = valid_indian
             for p in plates_found:
-                p_clean = p["plate"].upper().replace(" ", "")
-                p["plate"] = p_clean
-                p["violation"] = "NONE"
-                p["ghost_info"] = None
-                try:
-                    import rto
-                    v_rto = rto.lookup_rto_vehicle(p_clean)
-                    p["vahan_details"] = v_rto
-                    if v_rto.get("vehicle_maker") and v_rto.get("vehicle_model"):
-                        p["vehicle_type"] = f"{v_rto['vehicle_maker']} {v_rto['vehicle_model']}"
-                except Exception:
-                    pass
+                p_plate = p.get("plate", "")
+                p_viol = p.get("violation", "NONE")
+                # If it's an unplated vehicle detected by ANPR
+                if p_viol == "MISSING_OR_COVERED_PLATE" or "NO PLATE" in p_plate or "UNREADABLE" in p_plate:
+                    v_prof = p.get("vehicle_profile")
+                    if not v_prof:
+                        try:
+                            import vehicle_profiler
+                            v_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=p.get("vehicle_type", "Car"))
+                        except Exception:
+                            pass
+                    ghost_info = None
+                    try:
+                        import vehicle_reid
+                        ghost_info = vehicle_reid.match_or_create_ghost(
+                            v_prof,
+                            camera_id="CAM_LIVE",
+                            timestamp=timestamp,
+                            image_path=snap_url,
+                            speed_kmph=0.0
+                        )
+                    except Exception:
+                        pass
+                    ghost_id = ghost_info.get("ghost_id", "GHOST_01") if ghost_info else "GHOST_01"
+                    p["plate"] = f"{ghost_id} (NO PLATE)"
+                    p["violation"] = "MISSING_OR_COVERED_PLATE"
+                    p["category"] = "Violation / Missing Plate"
+                    p["ghost_info"] = ghost_info
+                    p["vehicle_profile"] = v_prof
+                else:
+                    # Valid registered plate
+                    p_clean = p_plate.upper().replace(" ", "")
+                    p["plate"] = p_clean
+                    p["violation"] = "NONE"
+                    p["ghost_info"] = None
+                    try:
+                        import rto
+                        v_rto = rto.lookup_rto_vehicle(p_clean)
+                        p["vahan_details"] = v_rto
+                        if v_rto.get("vehicle_maker") and v_rto.get("vehicle_model"):
+                            p["vehicle_type"] = f"{v_rto['vehicle_maker']} {v_rto['vehicle_model']}"
+                    except Exception:
+                        pass
 
         elif filename_plate_match:
             plate_cand = filename_plate_match.group(0).upper()
@@ -347,10 +406,8 @@ def register_tracking_routes(app):
                 }
             }]
 
-
         else:
             # THIS IS AN UNPLATED SUSPECT VEHICLE (MISSING OR COVERED PLATE)!
-            # Run deep visual profiler to classify Make, Model, Body, Color, and Features
             v_prof = None
             try:
                 import vehicle_profiler
@@ -497,8 +554,9 @@ def register_tracking_routes(app):
                 "vahan_details": p.get("vahan_details")
             }
             out_detections.append(rec)
-            with _cam_lock:
-                _latest_live_detections.insert(0, rec)
+
+        with _cam_lock:
+            _latest_live_detections[:] = out_detections
 
         return jsonify({
             "success": True,

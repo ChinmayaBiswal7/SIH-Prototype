@@ -9,7 +9,7 @@ const VIEW_TITLES = {
   detail:    { title:"Intersection Console",        sub:"" },
 };
 
-export default function TopBar({ currentView, intersection, stats }) {
+export default function TopBar({ currentView, intersection, stats, currentUser, onLogout }) {
   const { title, sub } = VIEW_TITLES[currentView] || VIEW_TITLES.overview;
   const congColor = stats.avgCongestion > 70 ? "red" : stats.avgCongestion > 40 ? "amber" : "green";
 
@@ -25,6 +25,17 @@ export default function TopBar({ currentView, intersection, stats }) {
         <div className="tb-sub">{currentView==="detail" && intersection ? `ID: ${intersection.id}` : sub}</div>
       </div>
       <div className="tb-right">
+        {currentUser && (
+          <div className="tb-user-badge" title={`${currentUser.name} (${currentUser.role})`}>
+            <div className="tb-user-avatar">
+              <i className="fas fa-user-shield" />
+            </div>
+            <div className="tb-user-info">
+              <span className="tb-user-name">{currentUser.name}</span>
+              <span className="tb-user-role">{currentUser.badge}</span>
+            </div>
+          </div>
+        )}
         <div className="tb-pill">
           <span className="tb-pill-label">Congestion</span>
           <span className={`tb-pill-val ${congColor}`}>{stats.avgCongestion}%</span>
@@ -37,6 +48,12 @@ export default function TopBar({ currentView, intersection, stats }) {
         <button className="tb-icon-btn" onClick={toggleFS} title="Fullscreen">
           <i className="fas fa-expand" />
         </button>
+        {onLogout && (
+          <button className="tb-logout-btn" onClick={onLogout} title="Sign Out & Lock Terminal">
+            <i className="fas fa-arrow-right-from-bracket" />
+            <span>Lock</span>
+          </button>
+        )}
       </div>
     </header>
   );

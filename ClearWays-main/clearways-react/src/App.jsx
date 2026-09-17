@@ -13,6 +13,8 @@ import Incidents from "./components/views/Incidents/Incidents";
 import LiveGrid from "./components/views/LiveGrid/LiveGrid";
 import CityFlowView from "./components/views/CityFlow/CityFlowView";
 import LoadingScreen from "./components/common/LoadingScreen/LoadingScreen";
+import LoginScreen from "./components/common/Login/LoginScreen";
+import { getCurrentUser, logout as authLogout } from "./services/authService";
 import { BBSR_INTERSECTIONS, BBSR_INTERSECTION_MAP } from "./data/bbsrCityData";
 import {
   broadcastCorridorToFirebase,
@@ -24,6 +26,7 @@ import {
 import "./App.css";
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
   const [view, setView] = useState("overview");
   const [selectedId, setSelectedId] = useState(null);
   const [returnView, setReturnView] = useState("overview");
@@ -235,6 +238,15 @@ export default function App() {
 
   if (loading) return <LoadingScreen onComplete={handleLoadingComplete} />;
 
+  if (!currentUser) {
+    return <LoginScreen onLoginSuccess={(user) => setCurrentUser(user)} />;
+  }
+
+  function handleLogout() {
+    authLogout();
+    setCurrentUser(null);
+  }
+
   // Use live stats for sidebar when on live views
   const activeStats = (view === "livegrid" || view === "livedetail") ? liveStats : stats;
 
@@ -242,7 +254,13 @@ export default function App() {
     <div className="app">
       <Sidebar currentView={view} onNav={handleNav} time={time} date={date} stats={activeStats} />
       <div className="app-main">
-        <TopBar currentView={view} intersection={view === "livedetail" ? (selectedLiveIntersection || selectedIntersection) : selectedIntersection} stats={activeStats} />
+        <TopBar 
+          currentView={view} 
+          intersection={view === "livedetail" ? (selectedLiveIntersection || selectedIntersection) : selectedIntersection} 
+          stats={activeStats} 
+          currentUser={currentUser}
+          onLogout={handleLogout}
+        />
         <div className="app-content">
           {view === "overview" && <Overview intersections={intersections} stats={stats} onCellClick={(int) => handleCellClick(int, "overview")} />}
           {view === "map" && (

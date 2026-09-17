@@ -9,7 +9,7 @@ const VIEW_TITLES = {
   detail:    { title:"Intersection Console",        sub:"" },
 };
 
-export default function TopBar({ currentView, intersection, stats, currentUser, onLogout }) {
+export default function TopBar({ currentView, intersection, stats, currentUser, onLogout, onSwitchToTracking, onOpenHub }) {
   const { title, sub } = VIEW_TITLES[currentView] || VIEW_TITLES.overview;
   const congColor = stats.avgCongestion > 70 ? "red" : stats.avgCongestion > 40 ? "amber" : "green";
 
@@ -25,6 +25,18 @@ export default function TopBar({ currentView, intersection, stats, currentUser, 
         <div className="tb-sub">{currentView==="detail" && intersection ? `ID: ${intersection.id}` : sub}</div>
       </div>
       <div className="tb-right">
+        {onSwitchToTracking && (
+          <button className="tb-portal-switch-btn" onClick={onSwitchToTracking} title="Switch to Citywide ANPR & Vehicle Tracking">
+            <i className="fas fa-satellite" />
+            <span>Vehicle Tracking</span>
+          </button>
+        )}
+        {onOpenHub && (
+          <button className="tb-hub-switch-btn" onClick={onOpenHub} title="Return to Portal Selection Command Hub">
+            <i className="fas fa-cubes" />
+            <span>Command Hub</span>
+          </button>
+        )}
         {currentUser && (
           <div className="tb-user-badge" title={`${currentUser.name} (${currentUser.role})`}>
             <div className="tb-user-avatar">
@@ -58,3 +70,4 @@ export default function TopBar({ currentView, intersection, stats, currentUser, 
     </header>
   );
 }
+

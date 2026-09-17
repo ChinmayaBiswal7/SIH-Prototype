@@ -30,6 +30,16 @@ def add_cors_headers(response):
     return response
 
 
+# ── Mount ANPR Vehicle Tracking & Firebase Cloud Engine ──
+try:
+    from tracking_api import register_tracking_routes
+    register_tracking_routes(app)
+except Exception as _track_err:
+    print(f"[Server] Note: could not mount tracking routes: {_track_err}")
+
+
+
+
 # ── Junction & Road Network Definition (matches roadnet_5j.json) ──
 JUNCTIONS = ["J1", "J2", "J3", "J4", "J5"]
 JUNCTION_POSITIONS = {

@@ -14,8 +14,11 @@ import LiveGrid from "./components/views/LiveGrid/LiveGrid";
 import CityFlowView from "./components/views/CityFlow/CityFlowView";
 import LoadingScreen from "./components/common/LoadingScreen/LoadingScreen";
 import LoginScreen from "./components/common/Login/LoginScreen";
+import PortalSelector from "./components/PortalSelector/PortalSelector";
+import VehicleTrackingView from "./components/views/VehicleTracking/VehicleTrackingView";
 import { getCurrentUser, logout as authLogout } from "./services/authService";
 import { BBSR_INTERSECTIONS, BBSR_INTERSECTION_MAP } from "./data/bbsrCityData";
+
 import {
   broadcastCorridorToFirebase,
   subscribeToCorridor,
@@ -27,7 +30,14 @@ import "./App.css";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const [activePortal, setActivePortal] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const p = params.get("portal");
+    if (p === "traffic" || p === "tracking") return p;
+    return null; // Show PortalSelector by default after login
+  });
   const [view, setView] = useState("overview");
+
   const [selectedId, setSelectedId] = useState(null);
   const [returnView, setReturnView] = useState("overview");
   const [loading, setLoading] = useState(true);
@@ -245,6 +255,30 @@ export default function App() {
   function handleLogout() {
     authLogout();
     setCurrentUser(null);
+    setActivePortal(null);
+  }
+
+  // If no portal selected yet, show Command Hub Portal Selection screen
+  if (!activePortal) {
+    return (
+      <PortalSelector
+        currentUser={currentUser}
+        onSelectPortal={(portal) => setActivePortal(portal)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // If Vehicle Tracking selected, render dedicated Citywide ANPR & Journey tracking view
+  if (activePortal === "tracking") {
+    return (
+      <VehicleTrackingView
+        currentUser={currentUser}
+        onSwitchToTraffic={() => setActivePortal("traffic")}
+        onOpenHub={() => setActivePortal(null)}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   // Use live stats for sidebar when on live views
@@ -260,7 +294,10 @@ export default function App() {
           stats={activeStats} 
           currentUser={currentUser}
           onLogout={handleLogout}
+          onSwitchToTracking={() => setActivePortal("tracking")}
+          onOpenHub={() => setActivePortal(null)}
         />
+
         <div className="app-content">
           {view === "overview" && <Overview intersections={intersections} stats={stats} onCellClick={(int) => handleCellClick(int, "overview")} />}
           {view === "map" && (

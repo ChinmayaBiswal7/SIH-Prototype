@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "projectId": "clear-ways",
+  "apiKey": "AIzaSyC1zf2jlLNXFJEc80Tsom_m8sRCYPUxDTo",
+  "authDomain": "clear-ways.firebaseapp.com",
+  "storageBucket": "clear-ways.firebasestorage.app",
+  "messagingSenderId": "532736798369",
+  "appId": "1:532736798369:web:ac1a276d7f449b86080ae0",
+  "measurementId": "G-BXB5JBJ44G",
+  "service_account_file": "serviceAccountKey.json",
+  "database_url": "https://clear-ways-default-rtdb.firebaseio.com",
+  "use_firestore": true,
+  "use_rtdb": true
+}

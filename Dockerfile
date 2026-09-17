@@ -23,13 +23,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy CityFlow Backend code
 COPY ["city flow model/", "./cityflow_model/"]
 
+# Copy Vehicle Tracking & Firebase Backend code
+COPY ["portotype/", "./portotype/"]
+
 # Copy built React frontend to web static directory
 COPY --from=build-frontend /app/frontend/dist ./dist
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV REACT_DIST_DIR=/app/dist
+ENV PYTHONPATH="/app/cityflow_model:/app/portotype:${PYTHONPATH}"
 ENV PORT=5000
+
 
 EXPOSE 5000
 

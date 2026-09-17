@@ -7,14 +7,37 @@ dist/
 .vite/
 *.log
 
+# Large binary files & weights
+*.pt
+*.onnx
+*.engine
+*.bin
+*.mp4
+*.avi
+*.mkv
+*.mov
+
+# Databases & local caches
+*.db*
+*.sqlite*
+portotype/data/*.db*
+portotype/data/*.sqlite*
+portotype/data/snapshots/
+
+portotype/data/temp_videos/
+portotype/scratch_*.jpg
+portotype/test_*.jpg
+
 # Python cache & virtual environments
 __pycache__/
 *.py[cod]
 *$py.class
 venv/
+.venv/
 .env
 
 # OS files
 .DS_Store
 Thumbs.db
 desktop.ini
+

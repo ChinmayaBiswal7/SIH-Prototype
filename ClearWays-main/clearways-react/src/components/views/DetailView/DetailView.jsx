@@ -32,26 +32,6 @@ export default function DetailView({ intersection, onBack, onUpdateLane, onRever
             <div className="dv-title">{intersection.name}</div>
           </div>
           <span className={`dv-badge ${intersection.status}`}>{statusLabel}</span>
-          <button
-            className="dv-cctv-header-btn"
-            onClick={() => handleOpenCCTV("North")}
-            title="Launch Live CCTV Camera Matrix"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "6px 12px",
-              background: "rgba(59, 130, 246, 0.15)",
-              border: "1px solid rgba(59, 130, 246, 0.35)",
-              color: "#3b82f6",
-              borderRadius: "var(--radius-sm)",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            <i className="fas fa-video" /> Live CCTV Feed
-          </button>
         </div>
 
         <div className="dv-stats">

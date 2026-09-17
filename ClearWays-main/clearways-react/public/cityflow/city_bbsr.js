@@ -515,7 +515,7 @@ class BhubaneswarSim {
     this._buildNetwork();
     this._buildAgents();
     this._juncIds = Object.keys(this.junctions);
-    this._spawnBatch(900);
+    this._spawnBatch(220);
   }
 
   latLngToScreen(lat, lon) {
@@ -651,17 +651,16 @@ class BhubaneswarSim {
     return v.route.length > 0 ? v : null;
   }
 
-  _spawnBatch(targetCount) {
-    // Seed every road with vehicles already mid-trip
+  _spawnBatch(targetCount = 220) {
+    // Seed arterial roads with realistic traffic density
     const roadIds = Object.keys(this.roads);
     roadIds.forEach(rid => {
       const road = this.roads[rid];
       if (!road) return;
-      const perRoad = 6 + Math.floor(Math.random() * 4);
+      const perRoad = 2 + Math.floor(Math.random() * 2);
       for (let k = 0; k < perRoad; k++) {
         const v = this._spawnLongTrip();
         if (v) {
-          // Place vehicle partway along one of its route roads
           const roadIdx = Math.min(v.route.indexOf(rid) >= 0 ? v.route.indexOf(rid) : 0, v.route.length - 1);
           v.routeIdx = roadIdx;
           const curRoad = this.roads[v.route[roadIdx]];
@@ -673,7 +672,6 @@ class BhubaneswarSim {
       }
     });
 
-    // Fill remaining with fresh long-route trips
     while (this.vehicles.length < targetCount) {
       const v = this._spawnLongTrip();
       if (v) this.vehicles.push(v);
@@ -682,8 +680,13 @@ class BhubaneswarSim {
   }
 
   _roadDensity(rid) {
-    const cnt = this.vehicles.filter(v => v.currentRoadId === rid).length;
-    const len = this.roads[rid]?.totalLen || 300;
+    const road = this.roads[rid];
+    if (!road) return 0;
+    let cnt = 0;
+    for (let i = 0; i < this.vehicles.length; i++) {
+      if (this.vehicles[i].currentRoadId === rid) cnt++;
+    }
+    const len = road.totalLen || 300;
     return Math.min(1, cnt / Math.max(1, len / 24));
   }
 
@@ -699,6 +702,15 @@ class BhubaneswarSim {
   }
 
   _updateObs() {
+    // Single pass to bucket vehicles by roadId (O(N) instead of O(N*M) heavy loops)
+    const roadMap = {};
+    for (let i = 0; i < this.vehicles.length; i++) {
+      const v = this.vehicles[i];
+      const rid = v.currentRoadId;
+      if (!roadMap[rid]) roadMap[rid] = [];
+      roadMap[rid].push(v);
+    }
+
     Object.keys(this.agents).forEach(jId => {
       const ag = this.agents[jId];
       const p0Roads = ag.phaseRoads?.[0] || [];
@@ -706,13 +718,28 @@ class BhubaneswarSim {
 
       const buildStats = (rids) => {
         if (!rids.length) return { density: 0, queue: 0, speed: 7, score: 0 };
-        const dens = rids.map(rid => this._roadDensity(rid));
-        const avgD = dens.reduce((a, b) => a + b, 0) / dens.length;
-        // Count stopped vehicles (braking or speed < 1.2 m/s) queued at or near junction stop line
-        const queue = rids.reduce((acc, rid) => acc + this.vehicles.filter(v => v.currentRoadId === rid && (v.isBraking || v.speed < 1.2)).length, 0);
-        const onRoad = this.vehicles.filter(v => rids.includes(v.currentRoadId));
-        const spd = onRoad.length ? onRoad.reduce((a, v) => a + v.speed, 0) / onRoad.length : 7;
-        return { density: avgD, queue, speed: Math.round(spd * 10) / 10, score: 0 };
+        let totalVehs = 0;
+        let totalQueue = 0;
+        let totalSpeed = 0;
+        let totalCap = 0;
+
+        for (let i = 0; i < rids.length; i++) {
+          const rid = rids[i];
+          const vList = roadMap[rid] || [];
+          const roadLen = this.roads[rid]?.totalLen || 300;
+          totalVehs += vList.length;
+          totalCap += Math.max(1, roadLen / 24);
+
+          for (let k = 0; k < vList.length; k++) {
+            const v = vList[k];
+            if (v.isBraking || v.speed < 1.2) totalQueue++;
+            totalSpeed += v.speed;
+          }
+        }
+
+        const avgD = Math.min(1, totalVehs / Math.max(1, totalCap));
+        const avgSpd = totalVehs ? (totalSpeed / totalVehs) : 7;
+        return { density: avgD, queue: totalQueue, speed: Math.round(avgSpd * 10) / 10, score: 0 };
       };
 
       ag.obs.EW = buildStats(p0Roads);

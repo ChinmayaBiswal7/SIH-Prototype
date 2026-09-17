@@ -46,7 +46,7 @@
       top: 14px;
       left: 20px;
       right: 20px;
-      z-index: 10;
+      z-index: 1000;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -154,7 +154,7 @@
       bottom: 18px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 10;
+      z-index: 1000;
       background: var(--panel-bg);
       backdrop-filter: blur(16px);
       border: 1px solid var(--panel-border);
@@ -162,8 +162,12 @@
       padding: 8px 20px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+      max-width: calc(100vw - 36px);
+      flex-wrap: wrap;
+      justify-content: center;
+      pointer-events: auto;
     }
 
     .btn {

@@ -57,7 +57,6 @@ export default function CityFlowView({
           className="cf-iframe"
           src={CITYFLOW_SRC}
           title="CityFlow Multi-Agent Simulation"
-          sandbox="allow-scripts allow-same-origin allow-forms"
         />
       ) : (
         /* Standalone In-Browser Multi-Agent Visualizer */

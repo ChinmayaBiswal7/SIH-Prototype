@@ -558,13 +558,21 @@ def control():
 
     if cmd == "start":
         ctrl["paused"] = False
+        with state_lock:
+            sim_state["running"] = True
+        _refresh_state()
     elif cmd == "pause":
         ctrl["paused"] = True
+        with state_lock:
+            sim_state["running"] = False
+        _refresh_state()
     elif cmd == "step":
         ctrl["paused"] = True
         sim_state["step"] += 1
         for agent in agents.values():
             agent.step()
+        _update_ambulance()
+        _update_vehicle_fleet(0.1)
         _refresh_state()
     elif cmd == "reset":
         ctrl["paused"] = False
@@ -583,7 +591,8 @@ def control():
     elif cmd == "speed":
         ctrl["step_delay"] = float(data.get("value", 0.10))
 
-    return jsonify({"ok": True})
+    with state_lock:
+        return jsonify({"ok": True, "state": dict(sim_state)})
 
 
 @app.route("/api/incident", methods=["POST"])

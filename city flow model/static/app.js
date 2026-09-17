@@ -142,10 +142,19 @@ const canvas = document.getElementById('simCanvas');
       gridInitialized = true;
     }
 
-    // ── Clean SUMO 2D Renderer (60 FPS) ──
-    function render() {
-      ctx.clearRect(0, 0, width, height);
+    // ── High-Performance 60 FPS Dead Reckoning & Smooth Motion Engine ──
+    const smoothVehicles = new Map();
+    let smoothAmbDist = 0;
+    let lastAnimTime = performance.now();
+    let lastUserActionTime = 0;
 
+    // ── Clean SUMO 2D Renderer (60 FPS Butter Smooth) ──
+    function render() {
+      const now = performance.now();
+      const dt = Math.min((now - lastAnimTime) / 1000, 0.05);
+      lastAnimTime = now;
+
+      ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = '#080b11';
       ctx.fillRect(0, 0, width, height);
 
@@ -416,15 +425,42 @@ const canvas = document.getElementById('simCanvas');
         ctx.restore();
       }
 
-      // 4. Draw 2D Vehicles with Strict Real-Time Detour & Roadblock Logic
-      if (simState?.vehicles) {
-        simState.vehicles.forEach(v => {
+      // 4. Draw 2D Vehicles with Butter-Smooth 60 FPS Continuous Motion & Detour Logic
+      const vehList = (simState?.vehicles && simState.vehicles.length > 0) 
+        ? simState.vehicles 
+        : clientSim.vehicles;
+
+      if (vehList && vehList.length > 0) {
+        vehList.forEach(v => {
           let road = v.road;
           if (!road) return;
 
-          let dist = parseFloat(v.distance) || 0;
+          let serverDist = parseFloat(v.distance) || 0;
           let spd = parseFloat(v.speed) || 0;
           let isBraking = spd < 0.5;
+
+          // Continuous 60 FPS dead reckoning between server ticks
+          let vSmooth = smoothVehicles.get(v.id);
+          if (!vSmooth || vSmooth.road !== road) {
+            vSmooth = { road: road, dist: serverDist, speed: spd };
+            smoothVehicles.set(v.id, vSmooth);
+          } else {
+            vSmooth.speed = spd;
+            if (simState?.running || clientSim.running) {
+              vSmooth.dist += vSmooth.speed * dt;
+              // Smooth exponential blend to authoritative position (eliminates jitter)
+              const err = serverDist - vSmooth.dist;
+              if (Math.abs(err) > 30) {
+                vSmooth.dist = serverDist;
+              } else {
+                vSmooth.dist += err * 0.15;
+              }
+            } else {
+              vSmooth.dist = serverDist;
+            }
+          }
+
+          let dist = vSmooth.dist;
 
           // ACTIVE ACCIDENT DETOUR: Prevent cars from entering road_J3_J2
           if (isIncidentActive) {
@@ -492,11 +528,24 @@ const canvas = document.getElementById('simCanvas');
         });
       }
 
-      // 5. Draw Ambulance when Active
-      if (amb && amb.active && amb.current_road) {
-        const g = roadGeom[amb.current_road];
+      // 5. Draw Ambulance with 60 FPS Motion Interpolation
+      const isAmbActive = (amb && amb.active) || clientSim.ambulance.active;
+      const ambData = (amb && amb.active) ? amb : clientSim.ambulance;
+
+      if (isAmbActive && ambData.current_road) {
+        const g = roadGeom[ambData.current_road];
         if (g) {
-          const dist = Math.min(Math.max(amb.road_dist || 0, 0), g.len);
+          let serverDist = parseFloat(ambData.road_dist) || 0;
+          if (simState?.running || clientSim.running) {
+            smoothAmbDist += 7.5 * dt;
+            const err = serverDist - smoothAmbDist;
+            if (Math.abs(err) > 30) smoothAmbDist = serverDist;
+            else smoothAmbDist += err * 0.15;
+          } else {
+            smoothAmbDist = serverDist;
+          }
+
+          const dist = Math.min(Math.max(smoothAmbDist, 0), g.len);
           const t = dist / g.len;
           const wx = g.p1.x + t * g.dx;
           const wy = g.p1.y + t * g.dy;
@@ -655,8 +704,8 @@ const canvas = document.getElementById('simCanvas');
       document.getElementById('metric-speed').textContent = `${simState.avg_speed} km/h`;
       document.getElementById('metric-travel').textContent = `${simState.avg_travel_time}s`;
 
-      // Sync control button active state
-      if (typeof simState.running === 'boolean') {
+      // Sync control button active state (don't overwrite recently clicked user action within 1.5s)
+      if (typeof simState.running === 'boolean' && (Date.now() - lastUserActionTime > 1500)) {
         updatePlayPauseUI(simState.running);
       }
 
@@ -833,6 +882,9 @@ const canvas = document.getElementById('simCanvas');
         return;
       }
 
+      const modal = document.getElementById('dash-modal');
+      if (!modal || !modal.classList.contains('active')) return;
+
       if (!simState?.agents) return;
 
       for (const [jid, ag] of Object.entries(simState.agents)) {
@@ -923,7 +975,15 @@ const canvas = document.getElementById('simCanvas');
           body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error();
-        updateTelemetry();
+        const data = await res.json();
+        if (data && data.state) {
+          simState = data.state;
+          document.getElementById('metric-step').textContent = simState.step;
+          document.getElementById('metric-veh').textContent = simState.total_vehicles;
+          document.getElementById('metric-waiting').textContent = simState.total_waiting;
+          document.getElementById('metric-speed').textContent = `${simState.avg_speed} km/h`;
+          document.getElementById('metric-travel').textContent = `${simState.avg_travel_time}s`;
+        }
       } catch (err) {
         if (payload?.cmd === 'start') clientSim.running = true;
         if (payload?.cmd === 'pause') clientSim.running = false;
@@ -938,11 +998,11 @@ const canvas = document.getElementById('simCanvas');
           clientSim.ambulance.progress_m = 0;
           clientSim.ambulance.current_road = "road_VW1_J1";
         }
-        updateTelemetry();
       }
     }
 
     document.getElementById('btn-start').onclick = () => {
+      lastUserActionTime = Date.now();
       if (isCityMode && citySimInstance) {
         citySimInstance.paused = false;
         updatePlayPauseUI(true);
@@ -953,7 +1013,9 @@ const canvas = document.getElementById('simCanvas');
         apiCall('/api/control', { cmd: 'start' });
       }
     };
+
     document.getElementById('btn-pause').onclick = () => {
+      lastUserActionTime = Date.now();
       if (isCityMode && citySimInstance) {
         citySimInstance.paused = true;
         updatePlayPauseUI(false);
@@ -964,7 +1026,9 @@ const canvas = document.getElementById('simCanvas');
         apiCall('/api/control', { cmd: 'pause' });
       }
     };
+
     document.getElementById('btn-step').onclick = () => {
+      lastUserActionTime = Date.now();
       const btnStep = document.getElementById('btn-step');
       btnStep.classList.add('btn-step-active');
       setTimeout(() => btnStep.classList.remove('btn-step-active'), 150);
@@ -976,11 +1040,19 @@ const canvas = document.getElementById('simCanvas');
         updateCityHUD();
         updatePlayPauseUI(false);
       } else {
-        apiCall('/api/control', { cmd: 'step' });
+        if (simState) {
+          simState.running = false;
+          simState.step = (simState.step || 0) + 1;
+        }
+        clientSim.running = false;
+        stepClientSim();
         updatePlayPauseUI(false);
+        apiCall('/api/control', { cmd: 'step' });
       }
     };
+
     document.getElementById('btn-reset').onclick = () => {
+      lastUserActionTime = Date.now();
       const btnReset = document.getElementById('btn-reset');
       btnReset.style.transform = 'rotate(180deg)';
       setTimeout(() => { btnReset.style.transform = ''; }, 250);
@@ -995,10 +1067,18 @@ const canvas = document.getElementById('simCanvas');
         citySimInstance.ambulanceCorridorRoads = null;
         const banner = document.getElementById('corridor-banner');
         if (banner) banner.classList.remove('active');
-        citySimInstance._spawnBatch(900);
+        citySimInstance._spawnBatch(220);
         citySimInstance.render();
         updateCityHUD();
       } else {
+        smoothVehicles.clear();
+        if (simState) {
+          simState.step = 0;
+          simState.running = true;
+        }
+        clientSim.step = 0;
+        clientSim.running = true;
+        updatePlayPauseUI(true);
         apiCall('/api/control', { cmd: 'reset' });
       }
     };
@@ -1035,6 +1115,9 @@ const canvas = document.getElementById('simCanvas');
         isIncidentActive = !isIncidentActive;
         this.textContent = isIncidentActive ? '🚨 Clear Accident (J3)' : '⚠️ Inject Accident (J3)';
         this.className = isIncidentActive ? 'btn btn-active-incident' : 'btn btn-amber';
+        const incPayload = isIncidentActive ? [{ junction: 'J3', road: 'road_J3_J2', type: 'ACCIDENT', active: true }] : [];
+        if (simState) simState.active_incidents = incPayload;
+        clientSim.active_incidents = incPayload;
         apiCall('/api/incident', { junction: 'J3', road: 'road_J3_J2', type: 'ACCIDENT', active: isIncidentActive });
       }
     };
@@ -1044,6 +1127,20 @@ const canvas = document.getElementById('simCanvas');
         citySimInstance.dispatchAmbulance();
         document.getElementById('corridor-banner').classList.toggle('active', citySimInstance.ambulanceActive);
       } else {
+        const nextActive = !(simState?.ambulance?.active || clientSim.ambulance.active);
+        if (simState) {
+          if (!simState.ambulance) simState.ambulance = {};
+          simState.ambulance.active = nextActive;
+          simState.ambulance.current_road = 'road_VW1_J1';
+          simState.ambulance.progress_m = 0;
+          simState.ambulance.road_dist = 0;
+        }
+        clientSim.ambulance.active = nextActive;
+        clientSim.ambulance.progress_m = 0;
+        clientSim.ambulance.road_dist = 0;
+        clientSim.ambulance.current_road = 'road_VW1_J1';
+        smoothAmbDist = 0;
+        document.getElementById('corridor-banner').classList.toggle('active', nextActive);
         apiCall('/api/ambulance', {});
       }
     };

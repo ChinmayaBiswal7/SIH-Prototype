@@ -69,30 +69,28 @@ export function useLiveSimulation(active) {
   }, [active]);
 
   const startSim = useCallback(async () => {
+    setIsRunning(true);
+    setClientSimRunning(true);
     try { 
       await startSimulation(); 
-    } catch { 
-      setClientSimRunning(true);
-      setIsRunning(true);
-    }
+    } catch { }
   }, []);
 
   const pauseSim = useCallback(async () => {
+    setIsRunning(false);
+    setClientSimRunning(false);
     try { 
       await pauseSimulation(); 
-    } catch { 
-      setClientSimRunning(false);
-      setIsRunning(false);
-    }
+    } catch { }
   }, []);
 
   const resetSim = useCallback(async () => {
+    setIsRunning(true);
+    setClientSimRunning(true);
+    resetClientSim();
     try { 
       await resetSimulation(); 
-    } catch { 
-      resetClientSim();
-      setIsRunning(true);
-    }
+    } catch { }
   }, []);
 
   return { liveIntersections, liveStats, isConnected, isRunning, rawState, startSim, pauseSim, resetSim };

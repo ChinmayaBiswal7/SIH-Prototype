@@ -86,7 +86,7 @@ export default function LoginScreen({ onLoginSuccess }) {
               <i className="fas fa-user-shield" />
               <input
                 type="email"
-                placeholder="24051483@kiit.ac.in"
+                placeholder="Enter personnel email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"

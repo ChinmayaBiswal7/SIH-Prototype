@@ -23,6 +23,7 @@ dist/
 portotype/data/*.db*
 portotype/data/*.sqlite*
 portotype/data/snapshots/
+city flow model/data/
 
 portotype/data/temp_videos/
 portotype/scratch_*.jpg

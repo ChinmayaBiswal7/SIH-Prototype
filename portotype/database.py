@@ -17,6 +17,80 @@ def get_conn():
     return conn
 
 
+DEFAULT_CAMERAS = [
+    # NH-16 Primary Arterial
+    ("CAM_KHANDG", "Khandagiri Square", "NH-16", 20.2575, 85.7865, "West"),
+    ("CAM_FIRE_STN", "Fire Station Square", "NH-16", 20.2710, 85.7950, "West"),
+    ("CAM_BARAMN", "Baramunda Bus Terminal", "NH-16", 20.2768, 85.7995, "West"),
+    ("CAM_CRPF", "CRPF Square", "NH-16", 20.2872, 85.8115, "Central"),
+    ("CAM_NAYAPALLI", "Nayapalli / Behera Sahi", "NH-16", 20.2930, 85.8150, "Central"),
+    ("CAM_JAYADEV", "Jayadev Vihar (NH-16)", "NH-16", 20.3005, 85.8228, "North"),
+    ("CAM_ACHARYA", "Acharya Vihar (NH-16)", "NH-16", 20.3015, 85.8315, "North"),
+    ("CAM_VANI", "Vani Vihar (NH-16)", "NH-16", 20.2985, 85.8415, "North"),
+    ("CAM_RASUL", "Rasulgarh Square (NH-16)", "NH-16", 20.2936, 85.8647, "East"),
+    ("CAM_PALASUNI", "Palasuni Square (NH-16)", "NH-16", 20.3040, 85.8710, "East"),
+    ("CAM_MANCHES", "Mancheswar Industrial", "Industrial Rd", 20.3120, 85.8750, "East"),
+
+    # Nandankanan Road (Northern IT & University Corridor)
+    ("CAM_XAVIER", "Xavier Square (XIMB)", "Nandankanan Rd", 20.3125, 85.8198, "North"),
+    ("CAM_CS_PUR", "Chandrasekharpur BDA", "Nandankanan Rd", 20.3175, 85.8160, "North"),
+    ("CAM_KALINGA", "Kalinga Hospital Square", "Nandankanan Rd", 20.3205, 85.8215, "North"),
+    ("CAM_DAMANA", "Damana Square", "Nandankanan Rd", 20.3340, 85.8185, "North"),
+    ("CAM_SAILASHREE", "Sailashree Vihar Chowk", "Nandankanan Rd", 20.3440, 85.8150, "North"),
+    ("CAM_PATIA", "Patia Chowk", "Nandankanan Rd", 20.3540, 85.8170, "North"),
+    ("CAM_KIIT", "KIIT Square", "KIIT Road", 20.3565, 85.8165, "North"),
+    ("CAM_INFOCITY", "Infocity Square", "Infocity Rd", 20.3585, 85.8085, "North"),
+    ("CAM_CHANDAKA", "Chandaka Square", "Chandaka Rd", 20.3650, 85.7950, "North"),
+
+    # Western Infill
+    ("CAM_DELTA", "Delta Square", "Gopabandhu Marg", 20.2740, 85.8105, "West"),
+    ("CAM_GOPABANDHU", "Gopabandhu Square", "OUAT Rd", 20.2700, 85.8210, "West"),
+    ("CAM_SIRIPUR", "Siripur / OUAT Square", "OUAT Campus", 20.2645, 85.8155, "West"),
+
+    # Power Grid & Bidyut Marg
+    ("CAM_POWER", "Power House Square", "Bidyut Marg", 20.2910, 85.8235, "Central"),
+    ("CAM_RAJ_BHAWAN", "Raj Bhawan (Governor House)", "Rajpath", 20.2830, 85.8285, "Central"),
+
+    # Central Spine: Sachivalaya Marg & Rajpath
+    ("CAM_AG", "AG Square (State Capital)", "Sachivalaya Marg", 20.2745, 85.8322, "Central"),
+    ("CAM_CAPITAL", "Capital Hospital Square", "Hospital Rd", 20.2625, 85.8280, "Central"),
+    ("CAM_MAST", "Master Canteen (Station)", "Janpath", 20.2678, 85.8436, "Central"),
+    ("CAM_RAM", "Ram Mandir Square", "Janpath", 20.2800, 85.8443, "Central"),
+    ("CAM_RUPALI", "Rupali Square", "Janpath", 20.2893, 85.8427, "Central"),
+    ("CAM_SAHEED", "Saheed Nagar Square", "Janpath", 20.2910, 85.8520, "Central"),
+
+    # Eastern Secondary Arterials
+    ("CAM_VSS", "VSS Nagar Square", "VSS Marg", 20.3050, 85.8550, "East"),
+    ("CAM_SAINIK", "Sainik School Square", "Sainik School Rd", 20.3160, 85.8360, "North"),
+    ("CAM_BOMIKHAL", "Bomikhal Flyover", "Cuttack-Puri Rd", 20.2820, 85.8560, "East"),
+    ("CAM_LAXMI", "Laxmisagar Square", "Cuttack Rd", 20.2720, 85.8500, "East"),
+    ("CAM_KALPANA", "Kalpana Square", "Cuttack-Puri Rd", 20.2546, 85.8437, "South"),
+    ("CAM_RAJMAHAL", "Rajmahal Square", "Bidyut Marg", 20.2638, 85.8396, "Central"),
+    ("CAM_SISHU", "Sishu Bhawan Square", "Hospital Rd", 20.2585, 85.8350, "South"),
+
+    # South & Old Town Heritage Network
+    ("CAM_RAVI", "Ravi Talkies Square", "Puri Trunk Rd", 20.2470, 85.8415, "South"),
+    ("CAM_LINGARAJ", "Lingaraj Temple Square", "Old Town Heritage", 20.2382, 85.8335, "South"),
+    ("CAM_AIRPORT", "Airport Square", "Airport Rd", 20.2525, 85.8178, "South"),
+    ("CAM_POKHAR", "Pokhariput Square", "Anand Marg", 20.2460, 85.8170, "South"),
+    ("CAM_SUNDARPADA", "Sundarpada Square", "Sundarpada Main Rd", 20.2330, 85.8110, "South"),
+    ("CAM_ITER", "ITER / Gandamunda Square", "Jagamara Rd", 20.2505, 85.8050, "West"),
+    ("CAM_JAGAMARA", "Jagamara Square", "Khandagiri-Jagamara", 20.2530, 85.7970, "West"),
+    ("CAM_GHATIKIA", "Ghatikia / Kalinga Studio", "Studio Rd", 20.2490, 85.7830, "West"),
+
+    # Default numbered cameras
+    ("CAM_01", "Patia Chowk", "Nandankanan Road", 20.3540, 85.8170, "North"),
+    ("CAM_02", "Jayadev Vihar", "NH-16", 20.3005, 85.8228, "North"),
+    ("CAM_03", "Vani Vihar", "NH-16", 20.2985, 85.8415, "North"),
+    ("CAM_04", "Acharya Vihar", "NH-16", 20.3015, 85.8315, "North"),
+    ("CAM_05", "Master Canteen (Station)", "Janpath", 20.2678, 85.8436, "Central"),
+    ("CAM_06", "Kalpana Square", "Cuttack-Puri Road", 20.2546, 85.8437, "South"),
+    ("CAM_07", "Ravi Talkies Square", "Puri Trunk Road", 20.2470, 85.8415, "South"),
+    ("CAM_08", "Khandagiri Square", "NH-16", 20.2575, 85.7865, "West"),
+    ("CAM_LIVE", "Live CCTV Edge Node", "Station Road", 20.2640, 85.8354, "Central"),
+]
+
+
 def init_db():
     """Create all tables if they don't exist. Called once at startup."""
     conn = get_conn()
@@ -155,36 +229,44 @@ def init_db():
     c.execute("CREATE INDEX IF NOT EXISTS idx_ghost_ts ON ghost_sightings(timestamp)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_ghost_prof_ts ON ghost_profiles(last_seen_ts)")
 
-    # Seed all default Bhubaneswar Smart City Cameras if not present
-    default_cameras = [
-        ("CAM_01", "Bhubaneswar Railway Station", "Station Road", 20.2640, 85.8354, "Central"),
-        ("CAM_02", "Master Canteen Square", "MG Road", 20.2683, 85.8316, "Central"),
-        ("CAM_03", "Vani Vihar", "Vani Vihar Road", 20.2961, 85.8245, "North"),
-        ("CAM_04", "Patia Square", "NH-16", 20.3516, 85.8189, "North"),
-        ("CAM_05", "Infocity Entrance", "Infocity Road", 20.3587, 85.8149, "North"),
-        ("CAM_06", "Rasulgarh Overbridge", "Ring Road", 20.2795, 85.8702, "East"),
-        ("CAM_07", "Jaydev Vihar Square", "Jaydev Vihar Road", 20.3051, 85.8148, "West"),
-        ("CAM_08", "Khandagiri Square", "NH-57", 20.2524, 85.7796, "West"),
-        ("CAM_LIVE", "Live CCTV Edge Node", "Station Road", 20.2640, 85.8354, "Central"),
-    ]
-    for cam in default_cameras:
+    for cam in DEFAULT_CAMERAS:
         c.execute("INSERT OR REPLACE INTO cameras (id, name, road, lat, lon, area) VALUES (?,?,?,?,?,?)", cam)
+
+    # Seed demo unplated ghost suspect profiles if none exist
+    existing_ghosts = c.execute("SELECT COUNT(*) FROM ghost_profiles").fetchone()[0]
+    if existing_ghosts == 0:
+        demo_ghosts = [
+            ("GHOST_01", "Car", "Sedan", "Silver", "Tinted Glass", "#94A3B8", 1.6, "[]", "2026-09-17T18:10:00", "2026-09-17T19:25:00", "CAM_PATIA", "CAM_JAYADEV", 3, "/api/snapshot/test_cctv.jpg", "ACTIVE_TRACKING", "Hyundai", "Verna", 0.91, "Missing front plate & dark side tint", "Honda City"),
+            ("GHOST_02", "SUV", "SUV", "Black", "Black Grille", "#1E293B", 1.4, "[]", "2026-09-17T17:45:00", "2026-09-17T19:10:00", "CAM_KHANDG", "CAM_FIRE_STN", 2, "/api/snapshot/test_cctv.jpg", "ACTIVE_TRACKING", "Mahindra", "Scorpio-N", 0.88, "Completely removed front/rear plates", "Tata Harrier"),
+            ("GHOST_03", "Car", "Hatchback", "White", "Mud Splatter", "#F8FAFC", 1.5, "[]", "2026-09-17T18:30:00", "2026-09-17T19:35:00", "CAM_RASUL", "CAM_MAST", 3, "/api/snapshot/test_cctv.jpg", "ACTIVE_TRACKING", "Maruti", "Swift", 0.86, "Deliberately mud-covered number plate", "Hyundai i20"),
+            ("GHOST_04", "Motorbike", "Sports", "Red", "Black Decals", "#EF4444", 1.2, "[]", "2026-09-17T18:50:00", "2026-09-17T19:40:00", "CAM_KIIT", "CAM_INFOCITY", 2, "/api/snapshot/test_cctv.jpg", "ACTIVE_TRACKING", "Yamaha", "R15", 0.94, "Folded tail plate bracket", "KTM RC"),
+        ]
+        for g in demo_ghosts:
+            c.execute("""
+                INSERT OR IGNORE INTO ghost_profiles
+                (ghost_id, vehicle_type, body_subtype, dominant_color, secondary_color,
+                 color_hex, aspect_ratio, visual_embedding, first_seen_ts, last_seen_ts,
+                 first_camera, last_camera, total_sightings, best_image_path, status,
+                 estimated_make, estimated_model, make_confidence, distinguishing_features, runner_up)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, g)
+            c.execute("""
+                INSERT OR IGNORE INTO ghost_sightings (ghost_id, camera_id, timestamp, image_path, match_score, speed_kmph)
+                VALUES (?,?,?,?,?,?)
+            """, (g[0], g[10], g[8], g[13], 0.98, 48.0))
+            c.execute("""
+                INSERT OR IGNORE INTO ghost_sightings (ghost_id, camera_id, timestamp, image_path, match_score, speed_kmph)
+                VALUES (?,?,?,?,?,?)
+            """, (g[0], g[11], g[9], g[13], 0.94, 52.0))
 
     conn.commit()
     conn.close()
-    print("Database initialised with 8 connected Bhubaneswar Smart City cameras:", DB_PATH)
+    print("Database initialised with 46 Bhubaneswar Smart City cameras and suspect profiles:", DB_PATH)
 
 
 CAM_FALLBACKS = {
-    "CAM_01": {"name": "Bhubaneswar Railway Station", "road": "Station Road", "lat": 20.2640, "lon": 85.8354, "area": "Central"},
-    "CAM_02": {"name": "Master Canteen Square", "road": "MG Road", "lat": 20.2683, "lon": 85.8316, "area": "Central"},
-    "CAM_03": {"name": "Vani Vihar", "road": "Vani Vihar Road", "lat": 20.2961, "lon": 85.8245, "area": "North"},
-    "CAM_04": {"name": "Patia Square", "road": "NH-16", "lat": 20.3516, "lon": 85.8189, "area": "North"},
-    "CAM_05": {"name": "Infocity Entrance", "road": "Infocity Road", "lat": 20.3587, "lon": 85.8149, "area": "North"},
-    "CAM_06": {"name": "Rasulgarh Overbridge", "road": "Ring Road", "lat": 20.2795, "lon": 85.8702, "area": "East"},
-    "CAM_07": {"name": "Jaydev Vihar Square", "road": "Jaydev Vihar Road", "lat": 20.3051, "lon": 85.8148, "area": "West"},
-    "CAM_08": {"name": "Khandagiri Square", "road": "NH-57", "lat": 20.2524, "lon": 85.7796, "area": "West"},
-    "CAM_LIVE": {"name": "Live CCTV Edge Node", "road": "Station Road", "lat": 20.2640, "lon": 85.8354, "area": "Central"},
+    c[0]: {"name": c[1], "road": c[2], "lat": c[3], "lon": c[4], "area": c[5]}
+    for c in DEFAULT_CAMERAS
 }
 
 # --- Camera helpers ---
@@ -380,17 +462,35 @@ def get_od_patterns(limit=10):
     return [dict(r) for r in rows]
 
 
+COMMON_DEMO_PLATES = [
+    "OD05XX9999", "OD02BA4455", "OD01AF2024", "OD33K9876",
+    "OD02AY1122", "OD07TR5432", "OD14KL9988", "OD05BB7788",
+    "MH12DE1234", "DL10AB1234", "KA01AB1111", "WB02CD4567"
+]
+
 def search_plates(query, limit=20):
     clean_q = query.strip().upper().replace(" ", "")
+    if not clean_q:
+        return []
     conn = get_conn()
     rows = conn.execute("""
         SELECT DISTINCT plate FROM detections
         WHERE plate LIKE ?
         ORDER BY plate LIMIT ?
     """, (f"%{clean_q}%", limit)).fetchall()
-    conn.close()
     results = [r["plate"] for r in rows]
 
+    # Search blacklist
+    try:
+        bl_rows = conn.execute("SELECT DISTINCT plate FROM blacklist WHERE plate LIKE ? LIMIT ?", (f"%{clean_q}%", limit)).fetchall()
+        for br in bl_rows:
+            if br["plate"] not in results:
+                results.append(br["plate"])
+    except Exception:
+        pass
+    conn.close()
+
+    # Search Central Firebase vehicle plates
     if len(results) < limit:
         try:
             import firebase_sync
@@ -404,7 +504,15 @@ def search_plates(query, limit=20):
         except Exception:
             pass
 
-    return results
+    # Include matching realistic demo plates if results are few
+    if len(results) < limit:
+        for dp in COMMON_DEMO_PLATES:
+            if clean_q in dp and dp not in results:
+                results.append(dp)
+            if len(results) >= limit:
+                break
+
+    return results[:limit]
 
 
 

@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from "react";
 import "./VehicleTrackingView.css";
 
-export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLogout, currentUser }) {
-  const [activeTab, setActiveTab] = useState("map"); // "map" | "anpr" | "dossier" | "firebase"
+export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
+  const [activeTab, setActiveTab] = useState("map"); // "map" | "firebase"
+  const [targetPlate, setTargetPlate] = useState("");
   const [firebaseData, setFirebaseData] = useState({
     status: null,
     plates: [],
     loading: false,
     lastRefreshed: null
   });
+
+  function handleTrackPlate(plate) {
+    if (!plate) return;
+    setTargetPlate(plate);
+    setActiveTab("map");
+  }
 
   // Fetch live Central Firebase data when the Firebase tab is selected
   useEffect(() => {
@@ -55,12 +62,8 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLo
           <div>
             <div className="vt-title-row">
               <h1 className="vt-title">Citywide ANPR Vehicle Intelligence</h1>
-              <span className="vt-cloud-badge">
-                <span className="vt-pulse-dot" />
-                CENTRAL FIREBASE DB
-              </span>
             </div>
-            <p className="vt-sub">Bhubaneswar 8-Camera Cross-Junction Journey Reconstruction & Re-ID</p>
+            <p className="vt-sub">Bhubaneswar Multi-Camera Cross-Junction Journey Reconstruction & Re-ID</p>
           </div>
         </div>
 
@@ -74,41 +77,20 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLo
             <span>Tracking Map</span>
           </button>
           <button
-            className={`vt-tab-btn ${activeTab === "anpr" ? "active" : ""}`}
-            onClick={() => setActiveTab("anpr")}
-          >
-            <i className="fas fa-video" />
-            <span>Live Camera Node</span>
-          </button>
-          <button
             className={`vt-tab-btn ${activeTab === "firebase" ? "active" : ""}`}
             onClick={() => setActiveTab("firebase")}
           >
             <i className="fas fa-database" />
             <span>Central Cloud DB</span>
           </button>
-          <button
-            className={`vt-tab-btn ${activeTab === "dossier" ? "active" : ""}`}
-            onClick={() => setActiveTab("dossier")}
-          >
-            <i className="fas fa-file-shield" />
-            <span>Project Dossier</span>
-          </button>
         </div>
 
         {/* Action Switchers */}
         <div className="vt-actions">
           {onSwitchToTraffic && (
-            <button className="vt-btn vt-traffic-btn" onClick={onSwitchToTraffic} title="Switch to Urban Traffic Management">
+            <button className="vt-btn vt-traffic-btn" onClick={onSwitchToTraffic} title="Direct Switch to Urban Traffic Management">
               <i className="fas fa-traffic-light" />
               <span>Traffic Command</span>
-            </button>
-          )}
-
-          {onOpenHub && (
-            <button className="vt-btn vt-hub-btn" onClick={onOpenHub} title="Return to Portal Selector">
-              <i className="fas fa-cubes" />
-              <span>Command Hub</span>
             </button>
           )}
 
@@ -125,24 +107,9 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLo
       <div className="vt-viewport">
         {activeTab === "map" && (
           <iframe
-            src="/vehicle-tracking/dashboard.html"
+            key={targetPlate}
+            src={`/vehicle-tracking/dashboard.html${targetPlate ? `?track=${encodeURIComponent(targetPlate)}` : ''}`}
             title="Citywide ANPR Vehicle Tracking Dashboard"
-            className="vt-iframe"
-          />
-        )}
-
-        {activeTab === "anpr" && (
-          <iframe
-            src="/vehicle-tracking/anpr.html"
-            title="Live Edge Camera ANPR Feed"
-            className="vt-iframe"
-          />
-        )}
-
-        {activeTab === "dossier" && (
-          <iframe
-            src="/vehicle-tracking/dossier.html"
-            title="SIH 2026 Vehicle Intelligence Dossier"
             className="vt-iframe"
           />
         )}
@@ -158,7 +125,7 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLo
                   </h2>
                   <p className="vt-fb-p">
                     Traditional traffic systems use siloed, disconnected databases at individual junctions with no cross-camera tracking.
-                    Our architecture streams every camera sighting from CAM_01 through CAM_08 into a <strong>single central Firebase Firestore database</strong>.
+                    Our architecture streams every camera sighting from across all 46 city junctions into a <strong>single central Firebase Firestore database</strong>.
                     Sightings are aggregated into a dedicated Number Plate collection, sorted chronologically to recreate complete citywide vehicle routes.
                   </p>
                 </div>
@@ -181,7 +148,7 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLo
                 </div>
                 <div className="vt-tele-item">
                   <span className="vt-tele-lbl">JUNCTION NODES</span>
-                  <span className="vt-tele-val text-amber">8 Connected (CAM_01 - CAM_08)</span>
+                  <span className="vt-tele-val text-amber">46 Connected Intersections</span>
                 </div>
                 <div className="vt-tele-item">
                   <span className="vt-tele-lbl">SYNC STATUS</span>
@@ -261,6 +228,15 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onOpenHub, onLo
                           ))}
                         </div>
                       </div>
+
+                      <button 
+                        className="vt-btn" 
+                        style={{ width: "100%", marginTop: "12px", background: "#0284c7", color: "#fff", justifyContent: "center", borderRadius: "6px", padding: "8px", fontWeight: 700, fontSize: "0.82rem" }}
+                        onClick={() => handleTrackPlate(p.plate)}
+                      >
+                        <i className="fas fa-route" />
+                        <span>Track Route on Live Map &rarr;</span>
+                      </button>
                     </div>
                   );
                 })}

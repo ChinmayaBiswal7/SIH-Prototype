@@ -8,26 +8,26 @@ export const AUTHORIZED_TEAM_MEMBERS = [
   {
     email: "24051483@kiit.ac.in",
     password: "9692308808",
-    name: "Officer 24051483",
-    role: "Traffic Operations Specialist",
-    badge: "KIIT-01",
-    department: "Urban Traffic Control Command"
+    name: "",
+    role: "System Operator",
+    badge: "",
+    department: "Traffic Operations"
   },
   {
     email: "24051496@kiit.ac.in",
     password: "trAckMaker",
-    name: "Officer 24051496",
-    role: "Traffic Systems Engineer",
-    badge: "KIIT-02",
-    department: "AI Emergency Routing Unit"
+    name: "",
+    role: "System Operator",
+    badge: "",
+    department: "Traffic Operations"
   },
   {
     email: "24051479@kiit.ac.in",
     password: "ayush_616",
-    name: "Officer 24051479",
-    role: "Traffic Surveillance Analyst",
-    badge: "KIIT-03",
-    department: "Citywide ANPR Intelligence"
+    name: "",
+    role: "System Operator",
+    badge: "",
+    department: "Traffic Operations"
   }
 ];
 

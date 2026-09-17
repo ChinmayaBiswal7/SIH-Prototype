@@ -673,6 +673,21 @@ def get_ghost_trajectory(ghost_id):
     return [dict(r) for r in rows]
 
 
+def clear_live_db():
+    """Clears temporary/live upload detections and unplated records so every upload has completely fresh data."""
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM detections WHERE camera_id IN ('CAM_LIVE', 'CAM_CCTV_STREAM')")
+        conn.execute("DELETE FROM ghost_sightings WHERE camera_id IN ('CAM_LIVE', 'CAM_CCTV_STREAM')")
+        conn.execute("DELETE FROM ghost_profiles WHERE ghost_id LIKE 'UNPLATED-%'")
+        conn.commit()
+    except Exception as e:
+        print(f"[DB] clear_live_db note: {e}")
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     init_db()
+
 

@@ -253,6 +253,16 @@ def register_tracking_routes(app):
         limit = int(request.args.get("limit", 30))
         return jsonify(db.get_violations(limit=limit))
 
+    @app.route("/api/clear_db", methods=["GET", "POST"])
+    def api_clear_db():
+        try:
+            db.clear_live_db()
+            with _cam_lock:
+                _latest_live_detections.clear()
+            return jsonify({"success": True, "message": "Backend database and detection cache cleared successfully."})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     # -------------------------------------------------------------------
     # Trajectory & Search (with Google-like matching from 1 character)
     # -------------------------------------------------------------------
@@ -303,6 +313,14 @@ def register_tracking_routes(app):
         except Exception:
             pass
 
+        # Clear backend DB and memory for fresh upload processing (isolated, no stale records)
+        try:
+            db.clear_live_db()
+        except Exception:
+            pass
+        with _cam_lock:
+            _latest_live_detections.clear()
+
         plates_found = []
         frame = None
 
@@ -348,19 +366,18 @@ def register_tracking_routes(app):
                             v_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=p.get("vehicle_type", "Car"))
                         except Exception:
                             pass
-                    ghost_info = None
-                    try:
-                        import vehicle_reid
-                        ghost_info = vehicle_reid.match_or_create_ghost(
-                            v_prof,
-                            camera_id="CAM_LIVE",
-                            timestamp=timestamp,
-                            image_path=snap_url,
-                            speed_kmph=0.0
-                        )
-                    except Exception:
-                        pass
-                    ghost_id = ghost_info.get("ghost_id", "GHOST_01") if ghost_info else "GHOST_01"
+                    # Fresh unplated profile generated on the fly (no DB save, no cross-upload linking)
+                    dom_col = (v_prof.get("dominant_color", "UNK") if v_prof else "UNK").split()[0].upper()[:3]
+                    sub_tag = (v_prof.get("body_subtype", "CAR") if v_prof else "CAR").split()[0].upper()[:3]
+                    rand_id = random.randint(1000, 9999)
+                    ghost_id = f"UNPLATED-{dom_col}-{sub_tag}-{rand_id}"
+                    ghost_info = {
+                        "ghost_id": ghost_id,
+                        "is_new": True,
+                        "match_score": 1.0,
+                        "profile": v_prof,
+                        "image_path": snap_url
+                    }
                     p["plate"] = f"{ghost_id} (NO PLATE)"
                     p["violation"] = "MISSING_OR_COVERED_PLATE"
                     p["category"] = "Violation / Missing Plate"
@@ -431,27 +448,18 @@ def register_tracking_routes(app):
                     "runner_up": {"make": "Skoda", "model": "Kushaq", "confidence": 0.82}
                 }
 
-            ghost_info = None
-            try:
-                import vehicle_reid
-                ghost_info = vehicle_reid.match_or_create_ghost(
-                    v_prof,
-                    camera_id="CAM_LIVE",
-                    timestamp=timestamp,
-                    image_path=snap_url,
-                    speed_kmph=0.0
-                )
-            except Exception as ge:
-                print(f"[Tracking API] Re-ID note: {ge}")
-
-            ghost_id = ghost_info.get("ghost_id", "GHOST_01") if ghost_info else "GHOST_01"
-            if not ghost_info:
-                ghost_info = {
-                    "ghost_id": ghost_id,
-                    "profile": v_prof,
-                    "image_path": snap_url
-                }
-
+            # Fresh unplated profile generated on the fly (no DB save, no cross-upload linking)
+            dom_col = (v_prof.get("dominant_color", "UNK") if v_prof else "UNK").split()[0].upper()[:3]
+            sub_tag = (v_prof.get("body_subtype", "CAR") if v_prof else "CAR").split()[0].upper()[:3]
+            rand_id = random.randint(1000, 9999)
+            ghost_id = f"UNPLATED-{dom_col}-{sub_tag}-{rand_id}"
+            ghost_info = {
+                "ghost_id": ghost_id,
+                "is_new": True,
+                "match_score": 1.0,
+                "profile": v_prof,
+                "image_path": snap_url
+            }
             plate = f"{ghost_id} (NO PLATE)"
             plates_found = [{
                 "plate": plate,
@@ -513,27 +521,27 @@ def register_tracking_routes(app):
             ghost_info = p.get("ghost_info")
             v_prof = p.get("vehicle_profile")
 
-            db.insert_detection(
-                plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
-                confidence=p.get("confidence", 0.0 if p_viol == "MISSING_OR_COVERED_PLATE" else 0.95),
-                speed_kmph=0.0,
-                vehicle_type=p.get("vehicle_type", "Car"), image_path=snap_url,
-                voting_data=json.dumps(v_info), env_condition=env_cond, quality_score=q_score,
-                plate_color=p_color, category=p_cat, violation=p_viol
-            )
-            al.check_detection(plate, "CAM_LIVE", timestamp)
-
-            try:
-                firebase_sync.push_detection(
-                    plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
-                    confidence=p.get("confidence", 0.0), speed_kmph=0.0,
-                    vehicle_type=p.get("vehicle_type", "Car"), image_path=snap_url,
-                    plate_color=p_color, category=p_cat, violation=p_viol
-                )
-                if ghost_info and v_prof:
-                    firebase_sync.push_unplated_dossier(v_prof)
-            except Exception:
-                pass
+            # User requirement: Do NOT save unplated / no-plate vehicles to DB or persistent storage (fresh data every time)
+            is_unplated = "NO PLATE" in plate or p_viol == "MISSING_OR_COVERED_PLATE"
+            if not is_unplated:
+                try:
+                    db.insert_detection(
+                        plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
+                        confidence=p.get("confidence", 0.95),
+                        speed_kmph=0.0,
+                        vehicle_type=p.get("vehicle_type", "Car"), image_path=snap_url,
+                        voting_data=json.dumps(v_info), env_condition=env_cond, quality_score=q_score,
+                        plate_color=p_color, category=p_cat, violation=p_viol
+                    )
+                    al.check_detection(plate, "CAM_LIVE", timestamp)
+                    firebase_sync.push_detection(
+                        plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
+                        confidence=p.get("confidence", 0.95), speed_kmph=0.0,
+                        vehicle_type=p.get("vehicle_type", "Car"), image_path=snap_url,
+                        plate_color=p_color, category=p_cat, violation=p_viol
+                    )
+                except Exception as de:
+                    pass
 
             rec = {
                 "plate": plate,
@@ -575,6 +583,14 @@ def register_tracking_routes(app):
         v_file = request.files["file"]
         temp_vpath = os.path.join(SNAPSHOT_DIR, f"upload_{job_id}.mp4")
         v_file.save(temp_vpath)
+
+        # Clear backend DB and memory for fresh upload processing (isolated, no stale records)
+        try:
+            db.clear_live_db()
+        except Exception:
+            pass
+        with _cam_lock:
+            _latest_live_detections.clear()
 
         with _video_jobs_lock:
             _video_jobs[job_id] = {

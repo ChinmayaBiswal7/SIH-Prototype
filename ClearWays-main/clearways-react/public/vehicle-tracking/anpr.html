@@ -198,6 +198,9 @@ html,body{width:100%;height:100%;background:#020617;color:#f8fafc;font-family:-a
         <i class="fa-solid fa-file-video"></i> Upload CCTV Video (.mp4)
         <input type="file" id="vid-upload-input" accept="video/*" style="display:none" onchange="uploadVideoFile(this)"/>
       </label>
+
+      <!-- CLEAR SCAN & RESET DB -->
+      <button class="btn danger" onclick="clearLiveScan()" title="Clear backend DB & reset scan"><i class="fa-solid fa-broom"></i> Clear Scan</button>
     </div>
   </header>
 
@@ -574,6 +577,17 @@ function resetPlaceholder(){
     <div>Camera standby. Click <b>"Start Webcam"</b>, <b>"Upload MP4 Video"</b>, or <b>"Upload Photo"</b>.</div>
   `;
   ph.style.display = 'flex';
+}
+
+async function clearLiveScan(){
+  try{
+    await fetch(API + '/api/clear_db', {method: 'POST'});
+  }catch(e){}
+  liveDetectionsList = [];
+  renderAllCards([]);
+  resetPlaceholder();
+  const img = document.getElementById('live-img');
+  if(img){ img.src = ''; img.style.display = 'none'; }
 }
 
 async function uploadImageFile(input){

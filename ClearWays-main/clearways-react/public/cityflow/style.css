@@ -162,13 +162,15 @@
       padding: 8px 20px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       box-shadow: 0 12px 36px rgba(0,0,0,0.55);
-      max-width: calc(100vw - 36px);
-      flex-wrap: wrap;
-      justify-content: center;
-      pointer-events: auto;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      max-width: 95vw;
+      overflow-x: auto;
+      scrollbar-width: none;
     }
+    .bottom-dock::-webkit-scrollbar { display: none; }
 
     .btn {
       background: rgba(255, 255, 255, 0.07);

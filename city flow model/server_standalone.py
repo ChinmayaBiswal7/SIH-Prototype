@@ -282,28 +282,38 @@ class ContinuousVehicle:
                     if curr_phase_name != phase_name:
                         signal_red = True
 
-        # Deceleration & Queue dynamics
+        # Smooth Deceleration & Car-Following Physics (No stop-and-go jitter)
         dist_to_stop = stop_line - self.dist
-        must_stop_for_signal = signal_red and (dist_to_stop > 0) and (dist_to_stop < 55.0)
-        must_stop_for_leader = (leader_dist is not None) and (leader_dist < 14.0)
+        signal_stopping = signal_red and (0.0 < dist_to_stop < 55.0)
 
-        if must_stop_for_leader:
-            self.speed = 0.0
-            self.is_waiting = True
-        elif must_stop_for_signal:
-            if dist_to_stop <= 2.5:
-                self.dist = stop_line
+        min_gap = 12.0
+        desired_gap = 22.0
+
+        if leader_dist is not None and leader_dist < desired_gap:
+            if leader_dist <= min_gap:
+                self.speed = max(0.0, self.speed - 12.0 * dt)
+                self.is_waiting = (self.speed < 0.3)
+            else:
+                target_spd = self.target_speed * ((leader_dist - min_gap) / (desired_gap - min_gap))
+                if self.speed > target_spd:
+                    self.speed = max(target_spd, self.speed - 5.0 * dt)
+                else:
+                    self.speed = min(target_spd, self.speed + 3.0 * dt)
+                self.is_waiting = False
+        elif signal_stopping:
+            if dist_to_stop <= 2.0:
+                self.dist = min(self.dist, stop_line)
                 self.speed = 0.0
                 self.is_waiting = True
             else:
-                self.speed = max(0.5, self.speed - 9.0 * dt)
-                self.dist += self.speed * dt
-                self.is_waiting = (self.speed < 0.5)
+                brake_rate = max(2.5, min(8.5, (self.speed * self.speed) / (2.0 * max(1.5, dist_to_stop))))
+                self.speed = max(0.0, self.speed - brake_rate * dt)
+                self.is_waiting = (self.speed < 0.3)
         else:
-            # Smooth acceleration when light turns GREEN
             self.is_waiting = False
-            self.speed = min(self.target_speed, self.speed + 6.5 * dt)
-            self.dist += self.speed * dt
+            self.speed = min(self.target_speed, self.speed + 4.5 * dt)
+
+        self.dist += self.speed * dt
 
         # Transition to next road in route
         if self.dist >= road_len:

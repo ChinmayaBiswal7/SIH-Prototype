@@ -439,21 +439,30 @@ const canvas = document.getElementById('simCanvas');
           let spd = parseFloat(v.speed) || 0;
           let isBraking = spd < 0.5;
 
-          // Continuous 60 FPS dead reckoning between server ticks
+          // Continuous 60 FPS forward dead reckoning (strictly monotonic, NO backward drag jitter)
           let vSmooth = smoothVehicles.get(v.id);
           if (!vSmooth || vSmooth.road !== road) {
             vSmooth = { road: road, dist: serverDist, speed: spd };
             smoothVehicles.set(v.id, vSmooth);
           } else {
-            vSmooth.speed = spd;
+            // Smoothly adapt speed towards server target
+            vSmooth.speed = vSmooth.speed * 0.75 + spd * 0.25;
             if (simState?.running || clientSim.running) {
-              vSmooth.dist += vSmooth.speed * dt;
-              // Smooth exponential blend to authoritative position (eliminates jitter)
-              const err = serverDist - vSmooth.dist;
-              if (Math.abs(err) > 30) {
-                vSmooth.dist = serverDist;
+              if (vSmooth.speed > 0.15) {
+                // Advance strictly forward on every single 60 FPS frame
+                vSmooth.dist += vSmooth.speed * dt;
+                // If server is slightly ahead, gently glide forward to catch up (NEVER pull backwards!)
+                if (serverDist > vSmooth.dist) {
+                  const lead = serverDist - vSmooth.dist;
+                  if (lead > 30) {
+                    vSmooth.dist = serverDist;
+                  } else {
+                    vSmooth.dist += lead * 0.08;
+                  }
+                }
               } else {
-                vSmooth.dist += err * 0.15;
+                // Stopped at traffic signal or queue
+                vSmooth.dist = Math.min(vSmooth.dist, serverDist);
               }
             } else {
               vSmooth.dist = serverDist;
@@ -538,9 +547,11 @@ const canvas = document.getElementById('simCanvas');
           let serverDist = parseFloat(ambData.road_dist) || 0;
           if (simState?.running || clientSim.running) {
             smoothAmbDist += 7.5 * dt;
-            const err = serverDist - smoothAmbDist;
-            if (Math.abs(err) > 30) smoothAmbDist = serverDist;
-            else smoothAmbDist += err * 0.15;
+            if (serverDist > smoothAmbDist) {
+              const lead = serverDist - smoothAmbDist;
+              if (lead > 30) smoothAmbDist = serverDist;
+              else smoothAmbDist += lead * 0.08;
+            }
           } else {
             smoothAmbDist = serverDist;
           }

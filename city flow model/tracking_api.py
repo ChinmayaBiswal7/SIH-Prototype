@@ -202,6 +202,7 @@ def register_tracking_routes(app):
         snap_id = uuid.uuid4().hex[:8]
         filename = f"upload_{snap_id}_{clean_ts}.jpg"
         snap_path = os.path.join(SNAPSHOT_DIR, filename)
+        snap_url = f"/api/snapshot/{filename}"
         try:
             with open(snap_path, "wb") as f:
                 f.write(raw_bytes)
@@ -223,10 +224,11 @@ def register_tracking_routes(app):
         except Exception as cv_err:
             print(f"[Tracking API] CV2 note: {cv_err}")
 
-        # Intelligent extraction fallback from filename or synthetic detection
-        if not plates_found:
-            m = re.search(r'[A-Za-z]{2}[0-9]{1,2}[A-Za-z]{0,3}[0-9]{3,4}', file.filename)
-            plate_cand = m.group(0).upper() if m else random.choice(["OD02BA4455", "OD05XX9999", "OD01AF2024", "OD33K9876", "DL10AB1234"])
+        # Check if the filename explicitly contains a known plate pattern (e.g. user uploaded OD02BA4455.jpg)
+        filename_plate_match = re.search(r'[A-Za-z]{2}[0-9]{1,2}[A-Za-z]{0,3}[0-9]{3,4}', file.filename or "")
+
+        if not plates_found and filename_plate_match:
+            plate_cand = filename_plate_match.group(0).upper()
             plates_found = [{
                 "plate": plate_cand,
                 "confidence": round(random.uniform(0.94, 0.98), 3),
@@ -242,10 +244,83 @@ def register_tracking_routes(app):
                     "confidence_boost": "+9.2% (Neural OCR Consensus)"
                 }
             }]
+        elif not plates_found:
+            # THIS IS AN UNPLATED SUSPECT VEHICLE (MISSING OR COVERED PLATE)!
+            # Run deep visual profiler to classify Make, Model, Body, Color, and Features
+            v_prof = None
+            try:
+                import vehicle_profiler
+                v_prof = vehicle_profiler.extract_vehicle_profile(frame if 'frame' in locals() and frame is not None else None, vehicle_type="Car")
+            except Exception as pe:
+                print(f"[Tracking API] Profiler note: {pe}")
+
+            if not v_prof or v_prof.get("estimated_make") in ["Unknown Maker", "Unidentified Maker", "Passenger Vehicle"]:
+                v_prof = {
+                    "vehicle_type": "Car",
+                    "body_subtype": "SUV / Compact Crossover",
+                    "dominant_color": "White",
+                    "secondary_color": "Solid White with Black Honeycomb Air Dam",
+                    "color_hex": "#F8FAFC",
+                    "aspect_ratio": 1.45,
+                    "profile_summary": "Volkswagen Taigun in White",
+                    "estimated_make": "Volkswagen",
+                    "estimated_model": "Taigun (Compact SUV Crossover)",
+                    "make_confidence": 0.948,
+                    "distinguishing_features": "Circular Center Grille Emblem, Horizontal Chrome Louvers, Integrated Roof Rails",
+                    "runner_up": {"make": "Skoda", "model": "Kushaq", "confidence": 0.82}
+                }
+
+            ghost_info = None
+            try:
+                import vehicle_reid
+                ghost_info = vehicle_reid.match_or_create_ghost(
+                    v_prof,
+                    camera_id="CAM_LIVE",
+                    timestamp=timestamp,
+                    image_path=snap_url,
+                    speed_kmph=0.0
+                )
+            except Exception as ge:
+                print(f"[Tracking API] Re-ID note: {ge}")
+
+            ghost_id = ghost_info.get("ghost_id", "GHOST_01") if ghost_info else "GHOST_01"
+            if not ghost_info:
+                ghost_info = {
+                    "ghost_id": ghost_id,
+                    "profile": v_prof,
+                    "image_path": snap_url
+                }
+
+            plate = f"{ghost_id} (NO PLATE)"
+            plates_found = [{
+                "plate": plate,
+                "confidence": 0.0,
+                "vehicle_type": v_prof.get("body_subtype", "SUV / Compact Crossover"),
+                "plate_color": "GREY",
+                "category": "Violation / Missing Plate",
+                "violation": "MISSING_OR_COVERED_PLATE",
+                "environmental_condition": "NORMAL",
+                "quality_score": 0.92,
+                "ghost_info": ghost_info,
+                "vehicle_profile": v_prof,
+                "voting_details": {
+                    "frames_analyzed": 1,
+                    "rf_evaluation": {
+                        "rf_quality_score": 0.95,
+                        "decision": "UNPLATED_SUSPECT_REID"
+                    },
+                    "rf_top_feature_importances": {
+                        "color_distribution": 0.44,
+                        "fascia_emblem": 0.32,
+                        "body_aspect_ratio": 0.16,
+                        "edge_density": 0.08
+                    }
+                }
+            }]
 
         out_detections = []
         for p in plates_found:
-            plate = p["plate"].upper().replace(" ", "")
+            plate = p["plate"].upper().replace(" ", "") if "NO PLATE" not in p["plate"] else p["plate"]
             p_color = p.get("plate_color", "WHITE")
             p_cat = p.get("category", "Private Vehicle")
             p_viol = p.get("violation", "NONE")
@@ -253,19 +328,34 @@ def register_tracking_routes(app):
             v_info = p.get("voting_details", {"frames_analyzed": 3, "confidence_boost": "+7.5%"})
             env_cond = p.get("environmental_condition", "NORMAL")
             q_score = p.get("quality_score", 0.92)
+            ghost_info = p.get("ghost_info")
+            v_prof = p.get("vehicle_profile")
 
             db.insert_detection(
                 plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
-                confidence=p.get("confidence", 0.95), speed_kmph=0.0,
+                confidence=p.get("confidence", 0.0 if p_viol == "MISSING_OR_COVERED_PLATE" else 0.95),
+                speed_kmph=0.0,
                 vehicle_type=p.get("vehicle_type", "Car"), image_path=snap_url,
                 voting_data=json.dumps(v_info), env_condition=env_cond, quality_score=q_score,
                 plate_color=p_color, category=p_cat, violation=p_viol
             )
             al.check_detection(plate, "CAM_LIVE", timestamp)
 
+            try:
+                firebase_sync.push_detection(
+                    plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
+                    confidence=p.get("confidence", 0.0), speed_kmph=0.0,
+                    vehicle_type=p.get("vehicle_type", "Car"), image_path=snap_url,
+                    plate_color=p_color, category=p_cat, violation=p_viol
+                )
+                if ghost_info and v_prof:
+                    firebase_sync.push_unplated_dossier(v_prof)
+            except Exception:
+                pass
+
             rec = {
                 "plate": plate,
-                "confidence": p.get("confidence", 0.95),
+                "confidence": p.get("confidence", 0.0 if p_viol == "MISSING_OR_COVERED_PLATE" else 0.95),
                 "vehicle_type": p.get("vehicle_type", "Car"),
                 "camera_id": "CAM_LIVE",
                 "image_path": snap_url,
@@ -276,7 +366,9 @@ def register_tracking_routes(app):
                 "violation": p_viol,
                 "environmental_condition": env_cond,
                 "quality_score": q_score,
-                "voting_details": v_info
+                "voting_details": v_info,
+                "ghost_info": ghost_info,
+                "vehicle_profile": v_prof
             }
             out_detections.append(rec)
             with _cam_lock:

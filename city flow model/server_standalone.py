@@ -50,7 +50,7 @@ PHASE_NAMES = ["EW GREEN", "NS GREEN"]
 
 # Control flags
 ctrl = {
-    "paused": True,
+    "paused": False,
     "step_delay": 0.10,
 }
 
@@ -322,7 +322,7 @@ veh_counter = 0
 
 def _init_vehicle_fleet():
     global veh_counter
-    while len(vehicle_fleet) < 16:
+    while len(vehicle_fleet) < 28:
         veh_counter += 1
         route = random.choice(ROUTES)
         v = ContinuousVehicle(f"v_{veh_counter}", route)
@@ -357,7 +357,7 @@ def _update_vehicle_fleet(dt):
     vehicle_fleet.extend(survivors)
 
     # Spawn replacement vehicles to maintain realistic traffic volume
-    while len(vehicle_fleet) < 16:
+    while len(vehicle_fleet) < 28:
         veh_counter += 1
         route = random.choice(ROUTES)
         v = ContinuousVehicle(f"v_{veh_counter}", route)
@@ -474,31 +474,40 @@ def _update_ambulance():
 
 def _sim_worker():
     while True:
-        if not ctrl["paused"]:
-            sim_state["step"] += 1
+        try:
+            if not ctrl["paused"]:
+                sim_state["step"] += 1
 
-            dt = max(0.08, float(ctrl.get("step_delay", 0.10)))
-            _update_ambulance()
-            _update_vehicle_fleet(dt)
+                dt = max(0.08, float(ctrl.get("step_delay", 0.10)))
+                _update_ambulance()
+                _update_vehicle_fleet(dt)
 
-            for agent in agents.values():
-                agent.step()
+                for agent in agents.values():
+                    agent.step()
 
-            # Periodic agent messages
-            if sim_state["step"] % 5 == 0:
-                sender = random.choice(JUNCTIONS)
-                agent = agents[sender]
-                message_history.append({
-                    "sender": sender,
-                    "timestamp": sim_state["step"],
-                    "decision_reason": agent.decision_reason,
-                })
-                if len(message_history) > 50:
-                    message_history.pop(0)
+                # Periodic agent messages
+                if sim_state["step"] % 5 == 0:
+                    sender = random.choice(JUNCTIONS)
+                    agent = agents[sender]
+                    message_history.append({
+                        "sender": sender,
+                        "timestamp": sim_state["step"],
+                        "decision_reason": agent.decision_reason,
+                    })
+                    if len(message_history) > 50:
+                        message_history.pop(0)
 
-            _refresh_state()
+                _refresh_state()
+        except Exception as e:
+            print(f"[CityFlow Worker] Exception during step: {e}", flush=True)
 
         time.sleep(ctrl["step_delay"])
+
+
+# Initial state population and background thread launch (runs under Gunicorn & Standalone)
+_refresh_state()
+_sim_thread = threading.Thread(target=_sim_worker, daemon=True)
+_sim_thread.start()
 
 
 REACT_DIST = os.environ.get(
@@ -558,7 +567,7 @@ def control():
             agent.step()
         _refresh_state()
     elif cmd == "reset":
-        ctrl["paused"] = True
+        ctrl["paused"] = False
         sim_state["step"] = 0
         for jid in JUNCTIONS:
             agents[jid] = SimulatedAgent(jid)
@@ -637,9 +646,6 @@ def handle_override():
 
 
 if __name__ == "__main__":
-    _refresh_state()
-    t = threading.Thread(target=_sim_worker, daemon=True)
-    t.start()
     print("=" * 60)
     print("  CityFlow Standalone Server (Simulated Mode)")
     print("  Running at: http://localhost:5000")

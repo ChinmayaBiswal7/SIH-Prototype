@@ -83,7 +83,13 @@ const canvas = document.getElementById('simCanvas');
 
     async function loadRoadnet() {
       try {
-        const res = await fetch('/api/roadnet');
+        let res;
+        try {
+          res = await fetch('/api/roadnet');
+          if (!res.ok) throw new Error();
+        } catch {
+          res = await fetch('./roadnet_5j.json');
+        }
         roadnet = await res.json();
 
         roadnet.intersections.forEach(j => {
@@ -545,6 +551,54 @@ const canvas = document.getElementById('simCanvas');
       }
     }
 
+    // Standalone client simulation state for 5-junction network (used when Python is not running)
+    const CLIENT_ROADS = [
+      "road_VW1_J1", "road_J1_VW1", "road_J1_J3", "road_J3_J1",
+      "road_VN2_J2", "road_J2_VN2", "road_J2_J3", "road_J3_J2",
+      "road_J3_J4", "road_J4_J3", "road_VE4_J4", "road_J4_VE4",
+      "road_VS5_J5", "road_J5_VS5", "road_J5_J3", "road_J3_J5",
+    ];
+
+    let clientSim = {
+      step: 0,
+      running: true,
+      ambulance: { active: false, current_road: "road_VW1_J1", progress_m: 0, road_dist: 0 },
+      active_incidents: [],
+      vehicles: Array.from({ length: 38 }, (_, i) => ({
+        id: `veh_${i}`,
+        road: CLIENT_ROADS[i % CLIENT_ROADS.length],
+        distance: Math.random() * 180,
+        speed: 6.5 + Math.random() * 7.5
+      }))
+    };
+
+    function stepClientSim() {
+      if (!clientSim.running) return;
+      clientSim.step++;
+
+      clientSim.vehicles.forEach(v => {
+        v.distance += v.speed * 0.4;
+        if (v.distance > 195) {
+          v.distance = 0;
+          v.road = CLIENT_ROADS[Math.floor(Math.random() * CLIENT_ROADS.length)];
+        }
+      });
+
+      if (clientSim.ambulance.active) {
+        clientSim.ambulance.progress_m += 4.5;
+        const ambRoads = ["road_VW1_J1", "road_J1_J3", "road_J3_J4", "road_J4_VE4"];
+        const curIdx = ambRoads.indexOf(clientSim.ambulance.current_road);
+        if (clientSim.ambulance.progress_m > 190) {
+          clientSim.ambulance.progress_m = 0;
+          if (curIdx >= 0 && curIdx < ambRoads.length - 1) {
+            clientSim.ambulance.current_road = ambRoads[curIdx + 1];
+          } else {
+            clientSim.ambulance.active = false;
+          }
+        }
+      }
+    }
+
     // ── Flicker-Free Telemetry Updating (Direct DOM mutation) ──
     async function updateTelemetry() {
       // In Full City mode, CitySim handles all HUD metrics directly — skip polling mini-sim
@@ -552,46 +606,85 @@ const canvas = document.getElementById('simCanvas');
 
       try {
         const res = await fetch('/api/state');
+        if (!res.ok) throw new Error();
         simState = await res.json();
+      } catch (err) {
+        // Standalone browser simulation fallback
+        stepClientSim();
+        const jids = ['J1', 'J2', 'J3', 'J4', 'J5'];
+        const tl_phases = {};
+        const agents = {};
 
-        // Top HUD updates
-        document.getElementById('metric-step').textContent = simState.step;
-        document.getElementById('metric-veh').textContent = simState.total_vehicles;
-        document.getElementById('metric-waiting').textContent = simState.total_waiting;
-        document.getElementById('metric-speed').textContent = `${simState.avg_speed} km/h`;
-        document.getElementById('metric-travel').textContent = `${simState.avg_travel_time}s`;
+        jids.forEach((jid, idx) => {
+          const p = Math.floor(clientSim.step / (18 + idx * 3)) % 2;
+          const y = (clientSim.step % (18 + idx * 3)) > (18 + idx * 3 - 3);
+          tl_phases[jid] = { phase_idx: p, is_yellow: y };
+          agents[jid] = {
+            current_phase: p === 0 ? 'EW' : 'NS',
+            is_yellow: y,
+            steps_on_phase: clientSim.step % 18,
+            allocated_green: 30,
+            local_obs: {
+              EW: { density: 0.42, queue_length: 3, average_speed: 8.8, status: 'MEDIUM' },
+              NS: { density: 0.32, queue_length: 2, average_speed: 9.4, status: 'LOW' }
+            }
+          };
+        });
 
-        // Sync control button active state
-        if (typeof simState.running === 'boolean') {
-          updatePlayPauseUI(simState.running);
+        simState = {
+          step: clientSim.step,
+          running: clientSim.running,
+          total_vehicles: clientSim.vehicles.length,
+          total_waiting: 4,
+          avg_speed: +(8.6).toFixed(1),
+          avg_travel_time: +(15.0).toFixed(1),
+          ambulance: clientSim.ambulance,
+          active_incidents: clientSim.active_incidents,
+          tl_phases,
+          agents,
+          vehicles: clientSim.vehicles
+        };
+      }
+
+      if (!simState) return;
+
+      // Top HUD updates
+      document.getElementById('metric-step').textContent = simState.step;
+      document.getElementById('metric-veh').textContent = simState.total_vehicles;
+      document.getElementById('metric-waiting').textContent = simState.total_waiting;
+      document.getElementById('metric-speed').textContent = `${simState.avg_speed} km/h`;
+      document.getElementById('metric-travel').textContent = `${simState.avg_travel_time}s`;
+
+      // Sync control button active state
+      if (typeof simState.running === 'boolean') {
+        updatePlayPauseUI(simState.running);
+      }
+
+      // Ambulance banner
+      const isAmb = simState.ambulance && simState.ambulance.active;
+      document.getElementById('corridor-banner').classList.toggle('active', isAmb);
+
+      // Accident button state
+      const hasInc = simState.active_incidents && simState.active_incidents.length > 0;
+      isIncidentActive = hasInc;
+      const incBtn = document.getElementById('btn-incident-toggle');
+      if (hasInc) {
+        if (incBtn.textContent !== '🚨 Clear Accident (J3)') {
+          incBtn.textContent = '🚨 Clear Accident (J3)';
+          incBtn.className = 'btn btn-active-incident';
         }
-
-        // Ambulance banner
-        const isAmb = simState.ambulance && simState.ambulance.active;
-        document.getElementById('corridor-banner').classList.toggle('active', isAmb);
-
-        // Accident button state
-        const hasInc = simState.active_incidents && simState.active_incidents.length > 0;
-        isIncidentActive = hasInc;
-        const incBtn = document.getElementById('btn-incident-toggle');
-        if (hasInc) {
-          if (incBtn.textContent !== '🚨 Clear Accident (J3)') {
-            incBtn.textContent = '🚨 Clear Accident (J3)';
-            incBtn.className = 'btn btn-active-incident';
-          }
-        } else {
-          if (incBtn.textContent !== '⚠️ Inject Accident (J3)') {
-            incBtn.textContent = '⚠️ Inject Accident (J3)';
-            incBtn.className = 'btn btn-amber';
-          }
+      } else {
+        if (incBtn.textContent !== '⚠️ Inject Accident (J3)') {
+          incBtn.textContent = '⚠️ Inject Accident (J3)';
+          incBtn.className = 'btn btn-amber';
         }
+      }
 
-        // Sync node drawer values without recreating innerHTML
-        updateNodeDrawerValues();
+      // Sync node drawer values without recreating innerHTML
+      updateNodeDrawerValues();
 
-        // Sync dashboard grid values without recreating innerHTML
-        updateDashboardGridValues();
-      } catch (err) {}
+      // Sync dashboard grid values without recreating innerHTML
+      updateDashboardGridValues();
     }
 
     function updateNodeDrawerValues() {
@@ -824,22 +917,40 @@ const canvas = document.getElementById('simCanvas');
     // ── Instant UI Actions & API Calls ──
     async function apiCall(endpoint, payload) {
       try {
-        await fetch(endpoint, {
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
+        if (!res.ok) throw new Error();
         updateTelemetry();
-      } catch (err) {}
+      } catch (err) {
+        if (payload?.cmd === 'start') clientSim.running = true;
+        if (payload?.cmd === 'pause') clientSim.running = false;
+        if (payload?.cmd === 'reset') { clientSim.step = 0; clientSim.running = true; }
+        if (payload?.cmd === 'step') { stepClientSim(); }
+        if (endpoint.includes('incident')) {
+          if (payload.active) clientSim.active_incidents = [payload];
+          else clientSim.active_incidents = [];
+        }
+        if (endpoint.includes('ambulance')) {
+          clientSim.ambulance.active = !clientSim.ambulance.active;
+          clientSim.ambulance.progress_m = 0;
+          clientSim.ambulance.current_road = "road_VW1_J1";
+        }
+        updateTelemetry();
+      }
     }
 
-        document.getElementById('btn-start').onclick = () => {
+    document.getElementById('btn-start').onclick = () => {
       if (isCityMode && citySimInstance) {
         citySimInstance.paused = false;
         updatePlayPauseUI(true);
       } else {
-        apiCall('/api/control', { cmd: 'start' });
+        clientSim.running = true;
+        if (simState) simState.running = true;
         updatePlayPauseUI(true);
+        apiCall('/api/control', { cmd: 'start' });
       }
     };
     document.getElementById('btn-pause').onclick = () => {
@@ -847,8 +958,10 @@ const canvas = document.getElementById('simCanvas');
         citySimInstance.paused = true;
         updatePlayPauseUI(false);
       } else {
-        apiCall('/api/control', { cmd: 'pause' });
+        clientSim.running = false;
+        if (simState) simState.running = false;
         updatePlayPauseUI(false);
+        apiCall('/api/control', { cmd: 'pause' });
       }
     };
     document.getElementById('btn-step').onclick = () => {

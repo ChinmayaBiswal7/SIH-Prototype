@@ -942,13 +942,15 @@ const canvas = document.getElementById('simCanvas');
       }
     }
 
-        document.getElementById('btn-start').onclick = () => {
+    document.getElementById('btn-start').onclick = () => {
       if (isCityMode && citySimInstance) {
         citySimInstance.paused = false;
         updatePlayPauseUI(true);
       } else {
-        apiCall('/api/control', { cmd: 'start' });
+        clientSim.running = true;
+        if (simState) simState.running = true;
         updatePlayPauseUI(true);
+        apiCall('/api/control', { cmd: 'start' });
       }
     };
     document.getElementById('btn-pause').onclick = () => {
@@ -956,8 +958,10 @@ const canvas = document.getElementById('simCanvas');
         citySimInstance.paused = true;
         updatePlayPauseUI(false);
       } else {
-        apiCall('/api/control', { cmd: 'pause' });
+        clientSim.running = false;
+        if (simState) simState.running = false;
         updatePlayPauseUI(false);
+        apiCall('/api/control', { cmd: 'pause' });
       }
     };
     document.getElementById('btn-step').onclick = () => {

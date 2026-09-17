@@ -3,8 +3,8 @@
 FROM node:20-alpine AS build-frontend
 WORKDIR /app/frontend
 
-COPY ClearWays-main/clearways-react/package*.json ./
-RUN npm ci
+COPY ClearWays-main/clearways-react/package.json ./
+RUN npm install
 
 COPY ClearWays-main/clearways-react/ ./
 RUN npm run build
@@ -16,12 +16,12 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# Install Python requirements
-COPY "city flow model/requirements.txt" ./
+# Install Python requirements (JSON array syntax handles spaces cleanly)
+COPY ["city flow model/requirements.txt", "./"]
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy CityFlow Backend code
-COPY "city flow model/" ./cityflow_model/
+COPY ["city flow model/", "./cityflow_model/"]
 
 # Copy built React frontend to web static directory
 COPY --from=build-frontend /app/frontend/dist ./dist

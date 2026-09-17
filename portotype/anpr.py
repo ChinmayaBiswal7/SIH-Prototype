@@ -18,19 +18,18 @@ import enhancer
 import ml_selector
 import vehicle_profiler
 
-# Lazy-load EasyOCR
-
+# Optional EasyOCR lazy loader (handles missing dependencies gracefully without crashing)
 _ocr_reader = None
-
 
 def get_ocr():
     global _ocr_reader
     if _ocr_reader is None:
-        import easyocr
-        print("Loading EasyOCR model...")
-        _ocr_reader = easyocr.Reader(["en"], gpu=False, verbose=False)
-        print("EasyOCR ready.")
-    return _ocr_reader
+        try:
+            import easyocr
+            _ocr_reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+        except Exception:
+            _ocr_reader = False
+    return _ocr_reader if _ocr_reader is not False else None
 
 
 # -----------------------------------------------------------------------
@@ -421,14 +420,29 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
         versions.append(cv2.cvtColor(cv2.bitwise_not(otsu), cv2.COLOR_GRAY2BGR))
 
 
+    # Fast-path: lightweight Tesseract OCR (< 25MB RAM, ~40ms)
+    try:
+        import pytesseract
+        for ver in versions:
+            txt = pytesseract.image_to_string(ver, config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+            p = extract_indian_plate_from_string(txt) or post_process(txt)
+            if p and 8 <= len(p) <= 10:
+                return p, 0.95
+    except Exception:
+        pass
+
     candidates = []
 
-    for pass_idx, ver in enumerate(versions):
-        results = reader.readtext(ver, detail=1, paragraph=False,
-                                  contrast_ths=0.05, adjust_contrast=0.5,
-                                  allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -")
-        if not results:
-            continue
+    if reader is not None:
+        for pass_idx, ver in enumerate(versions):
+            try:
+                results = reader.readtext(ver, detail=1, paragraph=False,
+                                          contrast_ths=0.05, adjust_contrast=0.5,
+                                          allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -")
+            except Exception:
+                results = None
+            if not results:
+                continue
 
         # Strategy A: Full text joined in horizontal reading order
         sorted_res = sorted(results, key=lambda x: x[0][0][0])
@@ -683,16 +697,20 @@ def scan_frame_for_plates(frame):
                     "plate_color": p_color, "category": p_cat, "violation": "NONE"
                 })
 
-    # ── Strategy 4: Raw EasyOCR fallback (long plates in complex scenes) ──
-    if not detections:
+    # ── Strategy 4: Raw OCR fallback (long plates in complex scenes) ──
+    if not detections and reader is not None:
         proc = frame if w <= 640 else cv2.resize(frame, (640, int(h * 640.0 / w)))
         restored = enhancer.restore_image(proc, telemetry)
-        raw_results = reader.readtext(restored, detail=1, paragraph=False,
-                                      contrast_ths=0.05, adjust_contrast=0.5,
-                                      allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -")
-        # Only keep tokens that look like plate tokens (short, high conf)
-        plate_tokens = [(box, txt, c) for box, txt, c in raw_results
-                        if c >= 0.40 and 2 <= len(txt.replace(' ', '')) <= 6]
+        try:
+            raw_results = reader.readtext(restored, detail=1, paragraph=False,
+                                          contrast_ths=0.05, adjust_contrast=0.5,
+                                          allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -")
+        except Exception:
+            raw_results = None
+        if raw_results:
+            # Only keep tokens that look like plate tokens (short, high conf)
+            plate_tokens = [(box, txt, c) for box, txt, c in raw_results
+                            if c >= 0.40 and 2 <= len(txt.replace(' ', '')) <= 6]
         if len(plate_tokens) >= 2:
             sorted_res = sorted(plate_tokens, key=lambda x: x[0][0][0])
             combined = " ".join([t for _, t, _ in sorted_res])

@@ -592,7 +592,16 @@ async function uploadImageFile(input){
   img.src = '';
 
   try{
-    const res = await fetch(API + '/api/anpr/upload', {method: 'POST', body: fd}).then(r=>r.json());
+    const response = await fetch(API + '/api/anpr/upload', {method: 'POST', body: fd});
+    if(!response.ok){
+      const errTxt = await response.text();
+      let errMsg = 'Server returned HTTP ' + response.status;
+      try { const j = JSON.parse(errTxt); errMsg = j.error || errMsg; } catch(pe){}
+      alert('Upload error: ' + errMsg);
+      resetPlaceholder();
+      return;
+    }
+    const res = await response.json();
     if(res.success && res.detections && res.detections.length){
       liveDetectionsList = res.detections;
       renderAllCards(liveDetectionsList);
@@ -604,7 +613,7 @@ async function uploadImageFile(input){
 
       document.getElementById('card-count').textContent = liveDetectionsList.length + ' Detected';
     } else {
-      alert('Image processed: No valid Indian license plate detected in this image. Try a clearer front-facing vehicle photo.');
+      alert('Image processed: No vehicle detected in this image. Please upload a vehicle photo.');
       resetPlaceholder();
     }
   }catch(e){

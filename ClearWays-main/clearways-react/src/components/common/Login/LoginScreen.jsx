@@ -86,7 +86,7 @@ export default function LoginScreen({ onLoginSuccess }) {
               <i className="fas fa-user-shield" />
               <input
                 type="email"
-                placeholder="officer@clearways.io"
+                placeholder="24051483@kiit.ac.in"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -137,40 +137,8 @@ export default function LoginScreen({ onLoginSuccess }) {
           </button>
         </form>
 
-        {/* Quick Demo Access Drawer Toggle */}
-        <div className="login-footer">
-          <button 
-            type="button" 
-            className="login-drawer-toggle"
-            onClick={() => setShowDemoDrawer(!showDemoDrawer)}
-          >
-            <i className={`fas ${showDemoDrawer ? 'fa-chevron-up' : 'fa-id-badge'}`} />
-            <span>{showDemoDrawer ? 'Hide Authorized Demo Profiles' : 'Quick-Fill Authorized Team Profiles (SIH Presentation)'}</span>
-          </button>
-
-          {showDemoDrawer && (
-            <div className="login-demo-profiles">
-              <div className="login-dp-hint">Click any profile below to autofill verified credentials:</div>
-              {AUTHORIZED_TEAM_MEMBERS.map((acc, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className="login-dp-card"
-                  onClick={() => handleQuickFill(acc)}
-                >
-                  <div className="login-dp-main">
-                    <strong>{acc.name}</strong>
-                    <span className="login-dp-role">{acc.role}</span>
-                  </div>
-                  <div className="login-dp-badge">{acc.badge}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
         <div className="login-sub-footer">
-          <span>Encrypted with SHA-256 • Smart India Hackathon Prototype</span>
+          <span>End-to-End Cryptographic Security • KIIT Smart India Hackathon Team</span>
         </div>
       </div>
     </div>

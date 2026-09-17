@@ -3,47 +3,23 @@
 
 const AUTH_STORAGE_KEY = "clearways_auth_session";
 
-// Pre-authorized team members & evaluators
+// Pre-authorized team members (strictly limited to designated KIIT team accounts)
 export const AUTHORIZED_TEAM_MEMBERS = [
   {
-    email: "chinmaya@clearways.io",
-    password: "clearways@2026",
-    name: "Chinmaya Biswal",
-    role: "Lead Systems Architect & Officer",
-    badge: "HQ-01",
-    department: "Urban Traffic Control Room"
+    email: "24051483@kiit.ac.in",
+    password: "9692308808",
+    name: "Officer 24051483",
+    role: "Traffic Operations Specialist",
+    badge: "KIIT-01",
+    department: "Urban Traffic Control Command"
   },
   {
-    email: "team@clearways.io",
-    password: "sih@clearways2026",
-    name: "SIH Core Team",
-    role: "Operations Specialist",
-    badge: "HQ-02",
-    department: "Emergency Corridors & AI Phasing"
-  },
-  {
-    email: "admin@clearways.io",
-    password: "admin@clearways",
-    name: "Traffic HQ Administrator",
-    role: "Super Admin",
-    badge: "ROOT-00",
-    department: "State Transport Command"
-  },
-  {
-    email: "evaluator@sih.gov.in",
-    password: "sih@judge2026",
-    name: "SIH Evaluation Committee",
-    role: "Jury / Evaluator Access",
-    badge: "JURY-SIH",
-    department: "Ministry of Transportation Evaluation"
-  },
-  {
-    email: "officer@clearways.io",
-    password: "traffic@police2026",
-    name: "Traffic Control Officer",
-    role: "Field Operations Officer",
-    badge: "BBS-POLICE-04",
-    department: "Bhubaneswar Commissionerate Police"
+    email: "24051496@kiit.ac.in",
+    password: "trAckMaker",
+    name: "Officer 24051496",
+    role: "Traffic Systems Engineer",
+    badge: "KIIT-02",
+    department: "AI Emergency Routing Unit"
   }
 ];
 

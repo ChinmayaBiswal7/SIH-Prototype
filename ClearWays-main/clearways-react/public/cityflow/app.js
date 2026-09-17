@@ -142,17 +142,272 @@ const canvas = document.getElementById('simCanvas');
       gridInitialized = true;
     }
 
-    // ── High-Performance 60 FPS Dead Reckoning & Smooth Motion Engine ──
-    const smoothVehicles = new Map();
-    let smoothAmbDist = 0;
+    // ── High-Performance 60 FPS Continuous Motion Engine (Zero Jitter, Zero Stutter) ──
+    const MINI_ROUTES = [
+      ["road_VW1_J1", "road_J1_J3", "road_J3_J4", "road_J4_VE4"],
+      ["road_VE4_J4", "road_J4_J3", "road_J3_J1", "road_J1_VW1"],
+      ["road_VN2_J2", "road_J2_J3", "road_J3_J5", "road_J5_VS5"],
+      ["road_VS5_J5", "road_J5_J3", "road_J3_J2", "road_J2_VN2"],
+      ["road_VW1_J1", "road_J1_J3", "road_J3_J2", "road_J2_VN2"],
+      ["road_VN2_J2", "road_J2_J3", "road_J3_J4", "road_J4_VE4"],
+      ["road_VS5_J5", "road_J5_J3", "road_J3_J1", "road_J1_VW1"],
+      ["road_VE4_J4", "road_J4_J3", "road_J3_J5", "road_J5_VS5"],
+      ["road_VW1_J1", "road_J1_VW1"],
+      ["road_VE4_J4", "road_J4_VE4"],
+      ["road_VN2_J2", "road_J2_VN2"],
+      ["road_VS5_J5", "road_J5_VS5"],
+    ];
+
+    const ROAD_APPROACH_INFO = {
+      "road_VW1_J1": { jid: "J1", phaseIdx: 0 },
+      "road_J3_J1":  { jid: "J1", phaseIdx: 0 },
+      "road_VN2_J2": { jid: "J2", phaseIdx: 1 },
+      "road_J3_J2":  { jid: "J2", phaseIdx: 1 },
+      "road_J1_J3":  { jid: "J3", phaseIdx: 0 },
+      "road_J4_J3":  { jid: "J3", phaseIdx: 0 },
+      "road_J2_J3":  { jid: "J3", phaseIdx: 1 },
+      "road_J5_J3":  { jid: "J3", phaseIdx: 1 },
+      "road_J3_J4":  { jid: "J4", phaseIdx: 0 },
+      "road_VE4_J4": { jid: "J4", phaseIdx: 0 },
+      "road_J3_J5":  { jid: "J5", phaseIdx: 1 },
+      "road_VS5_J5": { jid: "J5", phaseIdx: 1 },
+    };
+
+    let miniVehCounter = 0;
+    function createMiniVehicle(id) {
+      const route = MINI_ROUTES[Math.floor(Math.random() * MINI_ROUTES.length)];
+      const routeIdx = Math.floor(Math.random() * route.length);
+      const vid = id || `v_${++miniVehCounter}`;
+      return {
+        id: vid,
+        route: route,
+        routeIdx: routeIdx,
+        dist: Math.random() * 160,
+        speed: 6.0 + Math.random() * 6.0,
+        targetSpeed: 9.5 + Math.random() * 4.5,
+        isBraking: false
+      };
+    }
+
+    let miniSimRunning = true;
+    let miniSimSpeedMultiplier = 1.0;
+    let miniStepCount = 0;
     let lastAnimTime = performance.now();
     let lastUserActionTime = 0;
+
+    let miniVehicles = Array.from({ length: 32 }, (_, i) => createMiniVehicle(`v_${i + 1}`));
+    miniVehCounter = 32;
+
+    let miniAmbulance = {
+      active: false,
+      current_road: "road_VW1_J1",
+      dist: 0
+    };
+
+    let localSignalTime = 0;
+    const localPhases = {
+      J1: { phase_idx: 0, is_yellow: false },
+      J2: { phase_idx: 1, is_yellow: false },
+      J3: { phase_idx: 0, is_yellow: false },
+      J4: { phase_idx: 0, is_yellow: false },
+      J5: { phase_idx: 1, is_yellow: false },
+    };
+
+    function updateLocalSignals(dt) {
+      localSignalTime += dt;
+      const cycle = 42;
+      const t = localSignalTime % cycle;
+      const isEWYellow = (t >= 18 && t < 21);
+      const isNS = (t >= 21 && t < 39);
+      const isNSYellow = (t >= 39 && t < 42);
+
+      ['J1', 'J3', 'J4'].forEach(jid => {
+        if (miniAmbulance.active) {
+          localPhases[jid] = { phase_idx: 0, is_yellow: false };
+        } else {
+          localPhases[jid] = {
+            phase_idx: isNS ? 1 : 0,
+            is_yellow: isEWYellow || isNSYellow
+          };
+        }
+      });
+
+      const t2 = (localSignalTime + 21) % cycle;
+      const isEWYellow2 = (t2 >= 18 && t2 < 21);
+      const isNS2 = (t2 >= 21 && t2 < 39);
+      const isNSYellow2 = (t2 >= 39 && t2 < 42);
+      ['J2', 'J5'].forEach(jid => {
+        localPhases[jid] = {
+          phase_idx: isNS2 ? 1 : 0,
+          is_yellow: isEWYellow2 || isNSYellow2
+        };
+      });
+    }
+
+    function updateMiniFleet(dt) {
+      if (!miniSimRunning) return;
+
+      const effectiveDt = dt * miniSimSpeedMultiplier;
+      updateLocalSignals(effectiveDt);
+
+      // Group vehicles by current road
+      const roadVehs = {};
+      miniVehicles.forEach(v => {
+        const r = v.route[v.routeIdx];
+        if (!r) return;
+        if (!roadVehs[r]) roadVehs[r] = [];
+        roadVehs[r].push(v);
+      });
+
+      // Sort descending by distance (leader closest to junction)
+      Object.values(roadVehs).forEach(group => {
+        group.sort((a, b) => b.dist - a.dist);
+      });
+
+      miniVehicles.forEach(v => {
+        let road = v.route[v.routeIdx];
+        if (!road) return;
+
+        const g = roadGeom[road];
+        const roadLen = (g && g.len > 0) ? g.len : 200.0;
+        const stopLine = Math.max(10, roadLen - 18.0);
+
+        // Accident avoidance at J3: detour vehicles away from blocked road_J3_J2
+        if (isIncidentActive) {
+          if (road === 'road_J3_J2') {
+            if (v.dist < 45) {
+              const charCode = v.id.charCodeAt(v.id.length - 1) || 0;
+              v.route = (charCode % 2 === 0) 
+                ? ['road_J3_J4', 'road_J4_VE4'] 
+                : ['road_J3_J1', 'road_J1_VW1'];
+              v.routeIdx = 0;
+              road = v.route[0];
+            } else if (v.dist > 70) {
+              v.dist = 70;
+              v.speed = 0;
+              v.isBraking = true;
+              return;
+            }
+          }
+        }
+
+        // Leader car distance
+        const group = roadVehs[road];
+        let leaderDist = Infinity;
+        if (group) {
+          const idx = group.indexOf(v);
+          if (idx > 0) {
+            leaderDist = group[idx - 1].dist - v.dist;
+          }
+        }
+
+        // Downstream traffic light state
+        let signalRed = false;
+        const appInfo = ROAD_APPROACH_INFO[road];
+        if (appInfo) {
+          if (miniAmbulance.active && (appInfo.jid === 'J1' || appInfo.jid === 'J3' || appInfo.jid === 'J4')) {
+            signalRed = (appInfo.phaseIdx !== 0);
+          } else {
+            const ph = simState?.tl_phases?.[appInfo.jid] || localPhases[appInfo.jid];
+            if (ph) {
+              if (ph.is_yellow) {
+                signalRed = true;
+              } else {
+                signalRed = (ph.phase_idx !== appInfo.phaseIdx);
+              }
+            }
+          }
+        }
+
+        // Smooth Car-Following & Signal Braking
+        const distToStop = stopLine - v.dist;
+        const minGap = 12.0;
+        const desiredGap = 22.0;
+
+        if (leaderDist < desiredGap) {
+          if (leaderDist <= minGap) {
+            v.speed = Math.max(0, v.speed - 14.0 * effectiveDt);
+            v.isBraking = true;
+          } else {
+            const target = v.targetSpeed * ((leaderDist - minGap) / (desiredGap - minGap));
+            if (v.speed > target) {
+              v.speed = Math.max(target, v.speed - 6.0 * effectiveDt);
+              v.isBraking = true;
+            } else {
+              v.speed = Math.min(target, v.speed + 3.0 * effectiveDt);
+              v.isBraking = false;
+            }
+          }
+        } else if (signalRed && distToStop > 0 && distToStop < 50.0) {
+          if (distToStop <= 1.5) {
+            v.dist = Math.min(v.dist, stopLine);
+            v.speed = 0;
+            v.isBraking = true;
+          } else {
+            const brakeRate = Math.max(2.5, Math.min(8.5, (v.speed * v.speed) / (2.0 * Math.max(1.5, distToStop))));
+            v.speed = Math.max(0, v.speed - brakeRate * effectiveDt);
+            v.isBraking = true;
+          }
+        } else {
+          v.isBraking = false;
+          v.speed = Math.min(v.targetSpeed, v.speed + 4.5 * effectiveDt);
+        }
+
+        // Ambulance clearance: expedite cars ahead of ambulance
+        if (miniAmbulance.active && road === miniAmbulance.current_road && v.dist > miniAmbulance.dist) {
+          v.speed = Math.max(v.speed, 14.0);
+          v.isBraking = false;
+        }
+
+        // Continuous distance advancement
+        v.dist += v.speed * effectiveDt;
+
+        // SEAMLESS INTERSECTION CROSSING (ZERO LAG, ZERO PAUSE)
+        if (v.dist >= roadLen) {
+          const excess = v.dist - roadLen;
+          v.routeIdx++;
+          if (v.routeIdx < v.route.length) {
+            v.dist = excess;
+          } else {
+            v.route = MINI_ROUTES[Math.floor(Math.random() * MINI_ROUTES.length)];
+            v.routeIdx = 0;
+            v.dist = 0;
+          }
+        }
+      });
+
+      // Update Ambulance
+      if (miniAmbulance.active) {
+        const ambRoad = miniAmbulance.current_road;
+        const g = roadGeom[ambRoad];
+        const ambLen = (g && g.len > 0) ? g.len : 200.0;
+        miniAmbulance.dist += 18.0 * effectiveDt;
+
+        if (miniAmbulance.dist >= ambLen) {
+          const ambCorridor = ["road_VW1_J1", "road_J1_J3", "road_J3_J4", "road_J4_VE4"];
+          const cIdx = ambCorridor.indexOf(ambRoad);
+          if (cIdx >= 0 && cIdx < ambCorridor.length - 1) {
+            miniAmbulance.dist = miniAmbulance.dist - ambLen;
+            miniAmbulance.current_road = ambCorridor[cIdx + 1];
+          } else {
+            miniAmbulance.active = false;
+            miniAmbulance.dist = 0;
+            const banner = document.getElementById('corridor-banner');
+            if (banner) banner.classList.remove('active');
+          }
+        }
+      }
+    }
 
     // ── Clean SUMO 2D Renderer (60 FPS Butter Smooth) ──
     function render() {
       const now = performance.now();
       const dt = Math.min((now - lastAnimTime) / 1000, 0.05);
       lastAnimTime = now;
+
+      if (!isCityMode && roadnet) {
+        updateMiniFleet(dt);
+      }
 
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = '#080b11';
@@ -426,137 +681,63 @@ const canvas = document.getElementById('simCanvas');
       }
 
       // 4. Draw 2D Vehicles with Butter-Smooth 60 FPS Continuous Motion & Detour Logic
-      const vehList = (simState?.vehicles && simState.vehicles.length > 0) 
-        ? simState.vehicles 
-        : clientSim.vehicles;
+      miniVehicles.forEach(v => {
+        let road = v.route[v.routeIdx];
+        if (!road) return;
 
-      if (vehList && vehList.length > 0) {
-        vehList.forEach(v => {
-          let road = v.road;
-          if (!road) return;
+        const g = roadGeom[road];
+        if (!g || g.len === 0) return;
 
-          let serverDist = parseFloat(v.distance) || 0;
-          let spd = parseFloat(v.speed) || 0;
-          let isBraking = spd < 0.5;
+        const dist = Math.min(Math.max(v.dist, 0), g.len);
+        const t = dist / g.len;
 
-          // Continuous 60 FPS forward dead reckoning (strictly monotonic, NO backward drag jitter)
-          let vSmooth = smoothVehicles.get(v.id);
-          if (!vSmooth || vSmooth.road !== road) {
-            vSmooth = { road: road, dist: serverDist, speed: spd };
-            smoothVehicles.set(v.id, vSmooth);
-          } else {
-            // Smoothly adapt speed towards server target
-            vSmooth.speed = vSmooth.speed * 0.75 + spd * 0.25;
-            if (simState?.running || clientSim.running) {
-              if (vSmooth.speed > 0.15) {
-                // Advance strictly forward on every single 60 FPS frame
-                vSmooth.dist += vSmooth.speed * dt;
-                // If server is slightly ahead, gently glide forward to catch up (NEVER pull backwards!)
-                if (serverDist > vSmooth.dist) {
-                  const lead = serverDist - vSmooth.dist;
-                  if (lead > 30) {
-                    vSmooth.dist = serverDist;
-                  } else {
-                    vSmooth.dist += lead * 0.08;
-                  }
-                }
-              } else {
-                // Stopped at traffic signal or queue
-                vSmooth.dist = Math.min(vSmooth.dist, serverDist);
-              }
-            } else {
-              vSmooth.dist = serverDist;
-            }
-          }
+        const wx = g.p1.x + t * g.dx;
+        const wy = g.p1.y + t * g.dy;
+        const sc = worldToScreen(wx, wy);
 
-          let dist = vSmooth.dist;
+        const offsetPx = 8 * view.scale;
+        const offX = -Math.sin(g.angle) * offsetPx;
+        const offY = Math.cos(g.angle) * offsetPx;
 
-          // ACTIVE ACCIDENT DETOUR: Prevent cars from entering road_J3_J2
-          if (isIncidentActive) {
-            if (road === 'road_J3_J2') {
-              // Cars entering J3 towards North are DETOURED onto road_J3_J1 (West/Left) or road_J3_J4 (East/Right)
-              if (dist < 45) {
-                const charCode = v.id.charCodeAt(v.id.length - 1) || 0;
-                road = (charCode % 2 === 0) ? 'road_J3_J4' : 'road_J3_J1';
-              } else {
-                // Cars already caught near the crash stop completely before the barrier
-                const crashStopLine = 75;
-                if (dist > crashStopLine) {
-                  dist = crashStopLine;
-                  isBraking = true;
-                }
-              }
-            }
-          }
+        const vx = sc.x + offX;
+        const vy = sc.y + offY;
 
-          const g = roadGeom[road];
-          if (!g || g.len === 0) return;
+        const vehColor = hashColor(v.id);
+        const isBraking = v.isBraking;
 
-          dist = Math.min(Math.max(dist, 0), g.len);
-          const t = dist / g.len;
+        ctx.save();
+        ctx.translate(vx, vy);
+        ctx.rotate(g.angle + Math.PI/2);
 
-          const wx = g.p1.x + t * g.dx;
-          const wy = g.p1.y + t * g.dy;
-          const sc = worldToScreen(wx, wy);
+        const carW = 4.8 * view.scale;
+        const carL = 8.5 * view.scale;
 
-          const offsetPx = 8 * view.scale;
-          const offX = -Math.sin(g.angle) * offsetPx;
-          const offY = Math.cos(g.angle) * offsetPx;
+        ctx.fillStyle = vehColor;
+        ctx.beginPath();
+        ctx.roundRect(-carW/2, -carL/2, carW, carL, 2);
+        ctx.fill();
 
-          const vx = sc.x + offX;
-          const vy = sc.y + offY;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(-carW/2 + 0.8, -carL/4, carW - 1.6, carL/3.2);
 
-          const vehColor = hashColor(v.id);
+        if (!isBraking) {
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(-carW/2 + 0.5, -carL/2, 1.2, 1.2);
+          ctx.fillRect(carW/2 - 1.7, -carL/2, 1.2, 1.2);
+        }
 
-          ctx.save();
-          ctx.translate(vx, vy);
-          ctx.rotate(g.angle + Math.PI/2);
+        ctx.fillStyle = isBraking ? '#ff1111' : '#660000';
+        ctx.fillRect(-carW/2 + 0.5, carL/2 - 1, 1.3, 1);
+        ctx.fillRect(carW/2 - 1.8, carL/2 - 1, 1.3, 1);
 
-          const carW = 4.8 * view.scale;
-          const carL = 8.5 * view.scale;
+        ctx.restore();
+      });
 
-          ctx.fillStyle = vehColor;
-          ctx.beginPath();
-          ctx.roundRect(-carW/2, -carL/2, carW, carL, 2);
-          ctx.fill();
-
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.fillRect(-carW/2 + 0.8, -carL/4, carW - 1.6, carL/3.2);
-
-          if (!isBraking) {
-            ctx.fillStyle = '#fef08a';
-            ctx.fillRect(-carW/2 + 0.5, -carL/2, 1.2, 1.2);
-            ctx.fillRect(carW/2 - 1.7, -carL/2, 1.2, 1.2);
-          }
-
-          ctx.fillStyle = isBraking ? '#ff1111' : '#660000';
-          ctx.fillRect(-carW/2 + 0.5, carL/2 - 1, 1.3, 1);
-          ctx.fillRect(carW/2 - 1.8, carL/2 - 1, 1.3, 1);
-
-          ctx.restore();
-        });
-      }
-
-      // 5. Draw Ambulance with 60 FPS Motion Interpolation
-      const isAmbActive = (amb && amb.active) || clientSim.ambulance.active;
-      const ambData = (amb && amb.active) ? amb : clientSim.ambulance;
-
-      if (isAmbActive && ambData.current_road) {
-        const g = roadGeom[ambData.current_road];
-        if (g) {
-          let serverDist = parseFloat(ambData.road_dist) || 0;
-          if (simState?.running || clientSim.running) {
-            smoothAmbDist += 7.5 * dt;
-            if (serverDist > smoothAmbDist) {
-              const lead = serverDist - smoothAmbDist;
-              if (lead > 30) smoothAmbDist = serverDist;
-              else smoothAmbDist += lead * 0.08;
-            }
-          } else {
-            smoothAmbDist = serverDist;
-          }
-
-          const dist = Math.min(Math.max(smoothAmbDist, 0), g.len);
+      // 5. Draw Ambulance with 60 FPS Continuous Motion
+      if (miniAmbulance.active && miniAmbulance.current_road) {
+        const g = roadGeom[miniAmbulance.current_road];
+        if (g && g.len > 0) {
+          const dist = Math.min(Math.max(miniAmbulance.dist, 0), g.len);
           const t = dist / g.len;
           const wx = g.p1.x + t * g.dx;
           const wy = g.p1.y + t * g.dy;
@@ -611,54 +792,6 @@ const canvas = document.getElementById('simCanvas');
       }
     }
 
-    // Standalone client simulation state for 5-junction network (used when Python is not running)
-    const CLIENT_ROADS = [
-      "road_VW1_J1", "road_J1_VW1", "road_J1_J3", "road_J3_J1",
-      "road_VN2_J2", "road_J2_VN2", "road_J2_J3", "road_J3_J2",
-      "road_J3_J4", "road_J4_J3", "road_VE4_J4", "road_J4_VE4",
-      "road_VS5_J5", "road_J5_VS5", "road_J5_J3", "road_J3_J5",
-    ];
-
-    let clientSim = {
-      step: 0,
-      running: true,
-      ambulance: { active: false, current_road: "road_VW1_J1", progress_m: 0, road_dist: 0 },
-      active_incidents: [],
-      vehicles: Array.from({ length: 38 }, (_, i) => ({
-        id: `veh_${i}`,
-        road: CLIENT_ROADS[i % CLIENT_ROADS.length],
-        distance: Math.random() * 180,
-        speed: 6.5 + Math.random() * 7.5
-      }))
-    };
-
-    function stepClientSim() {
-      if (!clientSim.running) return;
-      clientSim.step++;
-
-      clientSim.vehicles.forEach(v => {
-        v.distance += v.speed * 0.4;
-        if (v.distance > 195) {
-          v.distance = 0;
-          v.road = CLIENT_ROADS[Math.floor(Math.random() * CLIENT_ROADS.length)];
-        }
-      });
-
-      if (clientSim.ambulance.active) {
-        clientSim.ambulance.progress_m += 4.5;
-        const ambRoads = ["road_VW1_J1", "road_J1_J3", "road_J3_J4", "road_J4_VE4"];
-        const curIdx = ambRoads.indexOf(clientSim.ambulance.current_road);
-        if (clientSim.ambulance.progress_m > 190) {
-          clientSim.ambulance.progress_m = 0;
-          if (curIdx >= 0 && curIdx < ambRoads.length - 1) {
-            clientSim.ambulance.current_road = ambRoads[curIdx + 1];
-          } else {
-            clientSim.ambulance.active = false;
-          }
-        }
-      }
-    }
-
     // ── Flicker-Free Telemetry Updating (Direct DOM mutation) ──
     async function updateTelemetry() {
       // In Full City mode, CitySim handles all HUD metrics directly — skip polling mini-sim
@@ -669,75 +802,79 @@ const canvas = document.getElementById('simCanvas');
         if (!res.ok) throw new Error();
         simState = await res.json();
       } catch (err) {
-        // Standalone browser simulation fallback
-        stepClientSim();
+        // Local simulation fallback
         const jids = ['J1', 'J2', 'J3', 'J4', 'J5'];
-        const tl_phases = {};
         const agents = {};
 
-        jids.forEach((jid, idx) => {
-          const p = Math.floor(clientSim.step / (18 + idx * 3)) % 2;
-          const y = (clientSim.step % (18 + idx * 3)) > (18 + idx * 3 - 3);
-          tl_phases[jid] = { phase_idx: p, is_yellow: y };
+        jids.forEach((jid) => {
+          const ph = localPhases[jid] || { phase_idx: 0, is_yellow: false };
+          const p = ph.phase_idx;
+          const y = ph.is_yellow;
           agents[jid] = {
             current_phase: p === 0 ? 'EW' : 'NS',
             is_yellow: y,
-            steps_on_phase: clientSim.step % 18,
+            steps_on_phase: Math.floor((localSignalTime % 21)),
             allocated_green: 30,
             local_obs: {
               EW: { density: 0.42, queue_length: 3, average_speed: 8.8, status: 'MEDIUM' },
               NS: { density: 0.32, queue_length: 2, average_speed: 9.4, status: 'LOW' }
-            }
+            },
+            decision_reason: miniAmbulance.active 
+              ? '🚨 Emergency Green Corridor Preemption Active' 
+              : `Holding ${p === 0 ? 'EW' : 'NS'} Green: optimal flow coordination.`
           };
         });
 
         simState = {
-          step: clientSim.step,
-          running: clientSim.running,
-          total_vehicles: clientSim.vehicles.length,
-          total_waiting: 4,
-          avg_speed: +(8.6).toFixed(1),
+          step: ++miniStepCount,
+          running: miniSimRunning,
+          total_vehicles: miniVehicles.length,
+          total_waiting: miniVehicles.filter(v => v.isBraking).length,
+          avg_speed: +(miniVehicles.reduce((s, v) => s + v.speed, 0) / miniVehicles.length * 3.6).toFixed(1),
           avg_travel_time: +(15.0).toFixed(1),
-          ambulance: clientSim.ambulance,
-          active_incidents: clientSim.active_incidents,
-          tl_phases,
+          ambulance: miniAmbulance,
+          active_incidents: isIncidentActive ? [{ junction: 'J3', road: 'road_J3_J2', type: 'ACCIDENT', active: true }] : [],
+          tl_phases: localPhases,
           agents,
-          vehicles: clientSim.vehicles
+          vehicles: []
         };
       }
 
       if (!simState) return;
 
       // Top HUD updates
-      document.getElementById('metric-step').textContent = simState.step;
-      document.getElementById('metric-veh').textContent = simState.total_vehicles;
-      document.getElementById('metric-waiting').textContent = simState.total_waiting;
-      document.getElementById('metric-speed').textContent = `${simState.avg_speed} km/h`;
-      document.getElementById('metric-travel').textContent = `${simState.avg_travel_time}s`;
+      const totalVeh = miniVehicles.length;
+      const waitingVeh = miniVehicles.filter(v => v.isBraking).length;
+      const avgSpd = totalVeh > 0 
+        ? (miniVehicles.reduce((sum, v) => sum + v.speed, 0) / totalVeh * 3.6).toFixed(1) 
+        : "0.0";
+      const avgTravel = (14.0 + (waitingVeh / Math.max(1, totalVeh)) * 12.0).toFixed(1);
+
+      document.getElementById('metric-step').textContent = simState.step || miniStepCount;
+      document.getElementById('metric-veh').textContent = totalVeh;
+      document.getElementById('metric-waiting').textContent = waitingVeh;
+      document.getElementById('metric-speed').textContent = `${avgSpd} km/h`;
+      document.getElementById('metric-travel').textContent = `~${avgTravel}s`;
 
       // Sync control button active state (don't overwrite recently clicked user action within 1.5s)
-      if (typeof simState.running === 'boolean' && (Date.now() - lastUserActionTime > 1500)) {
-        updatePlayPauseUI(simState.running);
+      if (Date.now() - lastUserActionTime > 1500) {
+        updatePlayPauseUI(miniSimRunning);
       }
 
       // Ambulance banner
-      const isAmb = simState.ambulance && simState.ambulance.active;
+      const isAmb = (simState.ambulance && simState.ambulance.active) || miniAmbulance.active;
       document.getElementById('corridor-banner').classList.toggle('active', isAmb);
 
       // Accident button state
-      const hasInc = simState.active_incidents && simState.active_incidents.length > 0;
+      const hasInc = (simState.active_incidents && simState.active_incidents.length > 0) || isIncidentActive;
       isIncidentActive = hasInc;
       const incBtn = document.getElementById('btn-incident-toggle');
       if (hasInc) {
-        if (incBtn.textContent !== '🚨 Clear Accident (J3)') {
-          incBtn.textContent = '🚨 Clear Accident (J3)';
-          incBtn.className = 'btn btn-active-incident';
-        }
+        incBtn.textContent = '🚨 Clear (J3)';
+        incBtn.className = 'btn btn-active-incident';
       } else {
-        if (incBtn.textContent !== '⚠️ Inject Accident (J3)') {
-          incBtn.textContent = '⚠️ Inject Accident (J3)';
-          incBtn.className = 'btn btn-amber';
-        }
+        incBtn.textContent = '⚠️ Accident (J3)';
+        incBtn.className = 'btn btn-amber';
       }
 
       // Sync node drawer values without recreating innerHTML
@@ -996,19 +1133,9 @@ const canvas = document.getElementById('simCanvas');
           document.getElementById('metric-travel').textContent = `${simState.avg_travel_time}s`;
         }
       } catch (err) {
-        if (payload?.cmd === 'start') clientSim.running = true;
-        if (payload?.cmd === 'pause') clientSim.running = false;
-        if (payload?.cmd === 'reset') { clientSim.step = 0; clientSim.running = true; }
-        if (payload?.cmd === 'step') { stepClientSim(); }
-        if (endpoint.includes('incident')) {
-          if (payload.active) clientSim.active_incidents = [payload];
-          else clientSim.active_incidents = [];
-        }
-        if (endpoint.includes('ambulance')) {
-          clientSim.ambulance.active = !clientSim.ambulance.active;
-          clientSim.ambulance.progress_m = 0;
-          clientSim.ambulance.current_road = "road_VW1_J1";
-        }
+        if (payload?.cmd === 'start') miniSimRunning = true;
+        if (payload?.cmd === 'pause') miniSimRunning = false;
+        if (payload?.cmd === 'reset') { miniStepCount = 0; miniSimRunning = true; }
       }
     }
 
@@ -1018,7 +1145,7 @@ const canvas = document.getElementById('simCanvas');
         citySimInstance.paused = false;
         updatePlayPauseUI(true);
       } else {
-        clientSim.running = true;
+        miniSimRunning = true;
         if (simState) simState.running = true;
         updatePlayPauseUI(true);
         apiCall('/api/control', { cmd: 'start' });
@@ -1031,7 +1158,7 @@ const canvas = document.getElementById('simCanvas');
         citySimInstance.paused = true;
         updatePlayPauseUI(false);
       } else {
-        clientSim.running = false;
+        miniSimRunning = false;
         if (simState) simState.running = false;
         updatePlayPauseUI(false);
         apiCall('/api/control', { cmd: 'pause' });
@@ -1051,12 +1178,10 @@ const canvas = document.getElementById('simCanvas');
         updateCityHUD();
         updatePlayPauseUI(false);
       } else {
-        if (simState) {
-          simState.running = false;
-          simState.step = (simState.step || 0) + 1;
-        }
-        clientSim.running = false;
-        stepClientSim();
+        miniSimRunning = false;
+        if (simState) simState.running = false;
+        updateMiniFleet(0.1);
+        render();
         updatePlayPauseUI(false);
         apiCall('/api/control', { cmd: 'step' });
       }
@@ -1081,14 +1206,20 @@ const canvas = document.getElementById('simCanvas');
         citySimInstance._spawnBatch(220);
         citySimInstance.render();
         updateCityHUD();
+        updatePlayPauseUI(true);
       } else {
-        smoothVehicles.clear();
+        miniVehicles = Array.from({ length: 32 }, (_, i) => createMiniVehicle(`v_${i + 1}`));
+        miniVehCounter = 32;
+        miniAmbulance.active = false;
+        miniAmbulance.dist = 0;
+        miniStepCount = 0;
+        miniSimRunning = true;
+        const banner = document.getElementById('corridor-banner');
+        if (banner) banner.classList.remove('active');
         if (simState) {
           simState.step = 0;
           simState.running = true;
         }
-        clientSim.step = 0;
-        clientSim.running = true;
         updatePlayPauseUI(true);
         apiCall('/api/control', { cmd: 'reset' });
       }
@@ -1104,6 +1235,7 @@ const canvas = document.getElementById('simCanvas');
         mult = 1.0 + ((v - 50) / 50) * 2.5;
       }
       citySimSpeedMultiplier = mult;
+      miniSimSpeedMultiplier = mult;
       document.getElementById('lbl-speed').textContent = mult.toFixed(1) + '×';
 
       // Dynamically adjust CityFlow backend step delay
@@ -1116,19 +1248,18 @@ const canvas = document.getElementById('simCanvas');
       if (isCityMode && citySimInstance) {
         citySimInstance.injectIncident(citySimInstance.selectedJunction || 'MAST');
         if (citySimInstance.incidentActive) {
-          this.textContent = '🚨 Clear Accident';
+          this.textContent = '🚨 Clear (J3)';
           this.className = 'btn btn-active-incident';
         } else {
-          this.textContent = '⚠️ Inject Accident (MAST)';
+          this.textContent = '⚠️ Accident (J3)';
           this.className = 'btn btn-amber';
         }
       } else {
         isIncidentActive = !isIncidentActive;
-        this.textContent = isIncidentActive ? '🚨 Clear Accident (J3)' : '⚠️ Inject Accident (J3)';
+        this.textContent = isIncidentActive ? '🚨 Clear (J3)' : '⚠️ Accident (J3)';
         this.className = isIncidentActive ? 'btn btn-active-incident' : 'btn btn-amber';
         const incPayload = isIncidentActive ? [{ junction: 'J3', road: 'road_J3_J2', type: 'ACCIDENT', active: true }] : [];
         if (simState) simState.active_incidents = incPayload;
-        clientSim.active_incidents = incPayload;
         apiCall('/api/incident', { junction: 'J3', road: 'road_J3_J2', type: 'ACCIDENT', active: isIncidentActive });
       }
     };
@@ -1138,20 +1269,10 @@ const canvas = document.getElementById('simCanvas');
         citySimInstance.dispatchAmbulance();
         document.getElementById('corridor-banner').classList.toggle('active', citySimInstance.ambulanceActive);
       } else {
-        const nextActive = !(simState?.ambulance?.active || clientSim.ambulance.active);
-        if (simState) {
-          if (!simState.ambulance) simState.ambulance = {};
-          simState.ambulance.active = nextActive;
-          simState.ambulance.current_road = 'road_VW1_J1';
-          simState.ambulance.progress_m = 0;
-          simState.ambulance.road_dist = 0;
-        }
-        clientSim.ambulance.active = nextActive;
-        clientSim.ambulance.progress_m = 0;
-        clientSim.ambulance.road_dist = 0;
-        clientSim.ambulance.current_road = 'road_VW1_J1';
-        smoothAmbDist = 0;
-        document.getElementById('corridor-banner').classList.toggle('active', nextActive);
+        miniAmbulance.active = !miniAmbulance.active;
+        miniAmbulance.dist = 0;
+        miniAmbulance.current_road = 'road_VW1_J1';
+        document.getElementById('corridor-banner').classList.toggle('active', miniAmbulance.active);
         apiCall('/api/ambulance', {});
       }
     };
@@ -1266,7 +1387,7 @@ const canvas = document.getElementById('simCanvas');
 
       // Update button text to allow quick swapping back
       const btn = document.getElementById('btn-fullcity-toggle');
-      btn.textContent = '◀ Back to Mini Sim';
+      btn.textContent = '◀ Mini Sim';
       btn.classList.remove('btn-fullcity');
       btn.classList.add('btn-minisim');
 
@@ -1372,13 +1493,13 @@ const canvas = document.getElementById('simCanvas');
 
       // Restore button
       const btn = document.getElementById('btn-fullcity-toggle');
-      btn.textContent = '🏙️ Full City — Bhubaneswar';
+      btn.textContent = '🏙️ Full City';
       btn.classList.remove('btn-minisim');
       btn.classList.add('btn-fullcity');
 
       // Restore mini controls
       const incBtn = document.getElementById('btn-incident-toggle');
-      incBtn.textContent = isIncidentActive ? '🚨 Clear Accident (J3)' : '⚠️ Inject Accident (J3)';
+      incBtn.textContent = isIncidentActive ? '🚨 Clear (J3)' : '⚠️ Accident (J3)';
       incBtn.className = isIncidentActive ? 'btn btn-active-incident' : 'btn btn-amber';
 
       document.getElementById('corridor-banner').classList.remove('active');
@@ -1390,7 +1511,7 @@ const canvas = document.getElementById('simCanvas');
       initDashboardGridOnce();
 
       // Restart mini render loop
-      updatePlayPauseUI(simState?.running || false);
+      updatePlayPauseUI(miniSimRunning);
       requestAnimationFrame(loop);
     }
 

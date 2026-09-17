@@ -315,12 +315,13 @@ class ContinuousVehicle:
 
         self.dist += self.speed * dt
 
-        # Transition to next road in route
+        # Transition to next road in route seamlessly
         if self.dist >= road_len:
+            excess = self.dist - road_len
             self.route_idx += 1
             if self.route_idx >= len(self.route):
                 return False  # Completed trip
-            self.dist = 0.0
+            self.dist = excess
 
         return True
 

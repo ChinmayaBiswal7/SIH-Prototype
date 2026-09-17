@@ -151,7 +151,7 @@
     /* ── Bottom Floating Dock ── */
     .bottom-dock {
       position: absolute;
-      bottom: 18px;
+      bottom: 16px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 1000;
@@ -159,14 +159,14 @@
       backdrop-filter: blur(16px);
       border: 1px solid var(--panel-border);
       border-radius: 40px;
-      padding: 8px 20px;
+      padding: 6px 14px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 8px;
       box-shadow: 0 12px 36px rgba(0,0,0,0.55);
       flex-wrap: nowrap;
       white-space: nowrap;
-      max-width: 95vw;
+      max-width: calc(100% - 24px);
       overflow-x: auto;
       scrollbar-width: none;
     }
@@ -176,15 +176,16 @@
       background: rgba(255, 255, 255, 0.07);
       border: 1px solid rgba(255, 255, 255, 0.14);
       color: var(--text-main);
-      padding: 7px 15px;
+      padding: 5px 11px;
       border-radius: 20px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       transition: all 0.15s ease-in-out;
+      flex-shrink: 0;
     }
     .btn:hover {
       background: rgba(255, 255, 255, 0.16);
@@ -217,15 +218,17 @@
     .speed-slider-wrap {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       font-size: 11px;
       color: var(--text-muted);
-      padding: 0 6px;
+      padding: 0 4px;
+      flex-shrink: 0;
     }
-    input[type=range] {
+    .speed-slider-wrap input[type="range"] {
+      width: 52px;
+      height: 4px;
       accent-color: var(--accent-blue);
       cursor: pointer;
-      width: 75px;
     }
 
     /* ── Node Detail Drawer ── */

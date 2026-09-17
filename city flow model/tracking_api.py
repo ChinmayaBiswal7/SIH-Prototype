@@ -596,13 +596,11 @@ def register_tracking_routes(app):
                 if total_frames <= 0:
                     total_frames = 60
 
-                # Sample 4-5 strategic keyframes across the video
+                # Sample 3 fast keyframes across the video for sub-3-second processing
                 key_positions = [
-                    int(total_frames * 0.15),
-                    int(total_frames * 0.35),
-                    int(total_frames * 0.55),
-                    int(total_frames * 0.75),
-                    int(total_frames * 0.90)
+                    int(total_frames * 0.25),
+                    int(total_frames * 0.50),
+                    int(total_frames * 0.75)
                 ]
 
                 seen_plates = set()
@@ -612,8 +610,12 @@ def register_tracking_routes(app):
                     if not ret or frame is None:
                         continue
 
+                    # Downscale video frame to 480px for instant inference
+                    if frame.shape[1] > 480:
+                        frame = cv2.resize(frame, (480, int(frame.shape[0] * 480.0 / frame.shape[1])), interpolation=cv2.INTER_AREA)
+
                     # Update progress proportionally
-                    pct = 20 + int((idx + 1) * 15)
+                    pct = 30 + int((idx + 1) * 20)
                     with _video_jobs_lock:
                         if job_id in _video_jobs:
                             _video_jobs[job_id]["progress"] = min(90, pct)

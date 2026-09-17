@@ -391,11 +391,11 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
     reader = get_ocr()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img.copy()
 
-    # Resize large crops to max height 140px for ultra-fast PyTorch CRAFT inference
+    # Resize large crops to max width 280px & max height 90px for ultra-fast 200ms inference
     gh, gw = gray.shape[:2]
-    if gh > 140:
-        scale = 140.0 / gh
-        gray = cv2.resize(gray, (int(gw * scale), 140), interpolation=cv2.INTER_AREA)
+    if gw > 280 or gh > 90:
+        scale = min(280.0 / max(1, gw), 90.0 / max(1, gh))
+        gray = cv2.resize(gray, (max(1, int(gw * scale)), max(1, int(gh * scale))), interpolation=cv2.INTER_AREA)
 
     # Apply CLAHE to dramatically boost character contrast against plate background
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -410,16 +410,7 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
         p2_gray = cv2.addWeighted(up, 1.5, blur, -0.5, 0)
         versions.append(cv2.cvtColor(p2_gray, cv2.COLOR_GRAY2BGR))
 
-    if max_passes >= 3:
-        _, otsu = cv2.threshold(gray_clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        versions.append(cv2.cvtColor(otsu, cv2.COLOR_GRAY2BGR))
-
-    if max_passes >= 4:
-        _, otsu = cv2.threshold(gray_clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        versions.append(cv2.cvtColor(cv2.bitwise_not(otsu), cv2.COLOR_GRAY2BGR))
-
-
-    # Fast-path: lightweight Tesseract OCR (< 25MB RAM, ~40ms)
+    # Fast-path: lightweight Tesseract OCR (< 25MB RAM, ~30ms)
     try:
         import pytesseract
         for ver in versions:
@@ -433,7 +424,8 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
     candidates = []
 
     if reader is not None:
-        for pass_idx, ver in enumerate(versions):
+        # Limit to first 2 passes max for instant execution
+        for pass_idx, ver in enumerate(versions[:min(2, max_passes)]):
             try:
                 results = reader.readtext(ver, detail=1, paragraph=False,
                                           contrast_ths=0.05, adjust_contrast=0.5,
@@ -443,29 +435,29 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
             if not results:
                 continue
 
-        # Strategy A: Full text joined in horizontal reading order
-        sorted_res = sorted(results, key=lambda x: x[0][0][0])
-        combined   = " ".join([t for _, t, _ in sorted_res])
-        avg_conf   = float(np.mean([c for _, _, c in sorted_res]))
+            # Strategy A: Full text joined in horizontal reading order
+            sorted_res = sorted(results, key=lambda x: x[0][0][0])
+            combined   = " ".join([t for _, t, _ in sorted_res])
+            avg_conf   = float(np.mean([c for _, _, c in sorted_res]))
 
-        full_plate = extract_indian_plate_from_string(combined) or post_process(combined)
-        if full_plate and 8 <= len(full_plate) <= 10:
-            candidates.append((full_plate, max(0.25, avg_conf), pass_idx))
+            full_plate = extract_indian_plate_from_string(combined) or post_process(combined)
+            if full_plate and 8 <= len(full_plate) <= 10:
+                return full_plate, round(max(0.50, avg_conf), 3)
 
-        # Strategy B: Pairwise consecutive tokens (e.g. "MH 02" + "CV 8284")
-        if len(sorted_res) >= 2:
-            for i in range(len(sorted_res) - 1):
-                pair_str = sorted_res[i][1] + " " + sorted_res[i+1][1]
-                pair_conf = (sorted_res[i][2] + sorted_res[i+1][2]) / 2.0
-                pair_plate = extract_indian_plate_from_string(pair_str) or post_process(pair_str)
-                if pair_plate and 8 <= len(pair_plate) <= 10:
-                    candidates.append((pair_plate, max(0.25, float(pair_conf)), pass_idx))
+            # Strategy B: Pairwise consecutive tokens (e.g. "MH 02" + "CV 8284")
+            if len(sorted_res) >= 2:
+                for i in range(len(sorted_res) - 1):
+                    pair_str = sorted_res[i][1] + " " + sorted_res[i+1][1]
+                    pair_conf = (sorted_res[i][2] + sorted_res[i+1][2]) / 2.0
+                    pair_plate = extract_indian_plate_from_string(pair_str) or post_process(pair_str)
+                    if pair_plate and 8 <= len(pair_plate) <= 10:
+                        candidates.append((pair_plate, max(0.25, float(pair_conf)), pass_idx))
 
-        # Strategy C: Individual token only if it contains the full 8-10 char plate
-        for (_, text, conf) in results:
-            p = extract_indian_plate_from_string(text) or post_process(text)
-            if p and 8 <= len(p) <= 10:
-                candidates.append((p, max(0.25, float(conf)), pass_idx))
+            # Strategy C: Individual token only if it contains the full 8-10 char plate
+            for (_, text, conf) in results:
+                p = extract_indian_plate_from_string(text) or post_process(text)
+                if p and 8 <= len(p) <= 10:
+                    candidates.append((p, max(0.25, float(conf)), pass_idx))
 
 
 
@@ -637,14 +629,19 @@ def scan_frame_for_plates(frame):
         return []
 
     h, w = frame.shape[:2]
+    if w > 480:
+        scale = 480.0 / w
+        frame = cv2.resize(frame, (480, int(h * scale)), interpolation=cv2.INTER_AREA)
+        h, w = frame.shape[:2]
+
     telemetry = quality.assess_image_quality(frame, is_scene_frame=False)
     reader = get_ocr()
 
     detections = []
     found_plates_set = set()
 
-    # ── Strategy 1: multi_pass_ocr directly on full frame ─────────────
-    plate1, conf1 = multi_pass_ocr_on_plate(frame, max_passes=4)
+    # ── Strategy 1: multi_pass_ocr directly on frame ─────────────
+    plate1, conf1 = multi_pass_ocr_on_plate(frame, max_passes=2)
     if plate1 and plate1 not in found_plates_set:
         found_plates_set.add(plate1)
         res = _sequence_fusion.add_frame_observation(
@@ -656,6 +653,7 @@ def scan_frame_for_plates(frame):
             "plate_bbox": (0, 0, w, h), "voting_details": res[2], "telemetry": telemetry,
             "plate_color": p_color, "category": p_cat, "violation": "NONE"
         })
+        return detections
 
     # ── Strategy 2: Bumper Plate Region Localization (only if Strategy 1 found nothing) ──
     if not detections:

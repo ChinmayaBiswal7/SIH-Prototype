@@ -340,10 +340,17 @@ def register_tracking_routes(app):
                     except Exception as y_err:
                         print(f"[Tracking API] YOLO inference note: {y_err}")
 
-                # 2. Fallback to direct frame scan if YOLO found zero plates
-                if not plates_found:
+                # 2. If YOLO found zero plates OR if it prematurely flagged MISSING_OR_COVERED_PLATE,
+                # verify with direct multi-pass frame scan so real plates (like TN87C5106) are never falsely tagged unplated!
+                has_real_plate = any(p.get("violation") != "MISSING_OR_COVERED_PLATE" and "NO PLATE" not in p.get("plate", "") for p in plates_found)
+                if not has_real_plate:
                     try:
-                        plates_found = anpr_module.scan_frame_for_plates(frame)
+                        direct_plates = anpr_module.scan_frame_for_plates(frame)
+                        direct_valid = [p for p in direct_plates if p.get("violation") != "MISSING_OR_COVERED_PLATE" and "NO PLATE" not in p.get("plate", "")]
+                        if direct_valid:
+                            plates_found = direct_valid
+                        elif not plates_found:
+                            plates_found = direct_plates
                     except Exception as s_err:
                         print(f"[Tracking API] Scan frame note: {s_err}")
         except Exception as cv_err:

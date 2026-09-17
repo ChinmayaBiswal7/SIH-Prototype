@@ -24,15 +24,29 @@ export const AUTHORIZED_TEAM_MEMBERS = [
 ];
 
 /**
- * Authenticate team member credentials
+ * Authenticate team member credentials with smart typo tolerance
  */
 export function login(email, password) {
-  const normalizedEmail = (email || "").trim().toLowerCase();
+  let normalized = (email || "").trim().toLowerCase();
   const trimmedPassword = (password || "").trim();
 
-  const user = AUTHORIZED_TEAM_MEMBERS.find(
-    member => member.email.toLowerCase() === normalizedEmail && member.password === trimmedPassword
-  );
+  // Smart tolerance: fix @kiit.acin missing dot, or allow entering just roll number
+  if (normalized.endsWith("@kiit.acin")) {
+    normalized = normalized.replace("@kiit.acin", "@kiit.ac.in");
+  } else if (!normalized.includes("@") && normalized.length >= 6) {
+    normalized = `${normalized}@kiit.ac.in`;
+  }
+
+  const user = AUTHORIZED_TEAM_MEMBERS.find(member => {
+    const memberEmail = member.email.toLowerCase();
+    const isEmailMatch = (
+      memberEmail === normalized ||
+      memberEmail.replace(".ac.in", ".acin") === normalized ||
+      memberEmail.split("@")[0] === normalized.split("@")[0]
+    );
+    const isPassMatch = member.password === trimmedPassword;
+    return isEmailMatch && isPassMatch;
+  });
 
   if (user) {
     const sessionData = {

@@ -65,6 +65,12 @@ _video_jobs = {}
 _video_jobs_lock = threading.Lock()
 _upload_yolo_model = None
 
+_LIVE_AI_BACKEND_URL = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
+
+def get_ai_backend_url():
+    global _LIVE_AI_BACKEND_URL
+    return _LIVE_AI_BACKEND_URL
+
 def get_yolo_model():
     """Initializes and returns cached YOLOv8 vehicle detection model."""
     global _upload_yolo_model
@@ -171,6 +177,19 @@ def register_tracking_routes(app):
         print("[Tracking API] Initialized tracking database & alert rules.")
     except Exception as err:
         print(f"[Tracking API] Note on init_db: {err}")
+
+    @app.route("/api/set_ai_backend", methods=["POST", "GET"])
+    def set_ai_backend_endpoint():
+        global _LIVE_AI_BACKEND_URL
+        if request.method == "POST":
+            data = request.get_json(silent=True) or request.form
+            new_url = (data.get("url") or "").strip().rstrip("/")
+            if new_url:
+                _LIVE_AI_BACKEND_URL = new_url
+                print(f"[Tracking API] Dynamic AI Backend URL updated to: {_LIVE_AI_BACKEND_URL}")
+                return jsonify({"success": True, "ai_backend": _LIVE_AI_BACKEND_URL})
+            return jsonify({"error": "Missing url"}), 400
+        return jsonify({"success": True, "ai_backend": _LIVE_AI_BACKEND_URL})
 
     # -------------------------------------------------------------------
     # Static pages: Tracking Map & Live Camera Node
@@ -344,7 +363,7 @@ def register_tracking_routes(app):
         delegated_to_gpu = False
 
         # ── 0. High-Speed Colab GPU Inference Delegation ─────────────────────
-        ai_backend = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
+        ai_backend = get_ai_backend_url()
         cloud_url = None
         if ai_backend:
             try:
@@ -688,7 +707,7 @@ def register_tracking_routes(app):
 
         def bg_worker():
             detected_records = []
-            ai_backend = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
+            ai_backend = get_ai_backend_url()
             colab_video_done = False
             
             # ── 1. Fast Path: High-Speed Colab GPU Video Processing ──
@@ -1149,7 +1168,7 @@ def register_tracking_routes(app):
 def _prewarm_ai_models():
     """Pings AI backend GPU on startup. NEVER loads PyTorch on Render to protect 512MB RAM."""
     def _worker():
-        ai_backend = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
+        ai_backend = get_ai_backend_url()
         if ai_backend:
             try:
                 import requests

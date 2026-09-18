@@ -606,12 +606,17 @@ async function uploadImageFile(input){
   img.src = '';
 
   try{
-    const response = await fetch(API + '/api/anpr/upload', {method: 'POST', body: fd});
+    let response = await fetch(API + '/api/anpr/upload', {method: 'POST', body: fd});
+    if(!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)){
+      ph.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><div>Connecting to AI Backend (Retrying)...</div>';
+      await new Promise(r => setTimeout(r, 2500));
+      response = await fetch(API + '/api/anpr/upload', {method: 'POST', body: fd});
+    }
     if(!response.ok){
       const errTxt = await response.text();
       let errMsg = 'Server returned HTTP ' + response.status;
       try { const j = JSON.parse(errTxt); errMsg = j.error || errMsg; } catch(pe){}
-      alert('Upload error: ' + errMsg);
+      alert('Upload note: ' + errMsg);
       resetPlaceholder();
       return;
     }
@@ -621,7 +626,8 @@ async function uploadImageFile(input){
       renderAllCards(liveDetectionsList);
 
       ph.style.display = 'none';
-      const snapUrl = (res.annotated_frame ? API + res.annotated_frame : '') || (res.detections[0] && res.detections[0].image_path ? API + res.detections[0].image_path : '');
+      const rawImg = res.detections[0] && res.detections[0].image_path ? res.detections[0].image_path : '';
+      const snapUrl = (rawImg.startsWith('http') ? rawImg : '') || (res.annotated_frame ? API + res.annotated_frame : '') || (rawImg ? API + rawImg : '');
       img.src = snapUrl || (API + '/api/video_feed?t=' + Date.now());
       img.style.display = 'block';
 

@@ -345,137 +345,73 @@ def register_tracking_routes(app):
 
         # ── 0. High-Speed Colab GPU Inference Delegation ─────────────────────
         ai_backend = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
+        cloud_url = None
         if ai_backend:
-            for attempt in range(2):
-                try:
-                    import requests
-                    resp = requests.post(
-                        f"{ai_backend}/predict_image",
-                        files={"file": (filename, raw_bytes, "image/jpeg")},
-                        timeout=25
-                    )
-                    if resp.status_code == 200:
-                        ai_data = resp.json()
-                        if ai_data.get("success"):
-                            p_plate = ai_data.get("plate_number")
-                            has_plate = ai_data.get("has_plate", bool(p_plate and p_plate not in ["NONE", "UNPLATED"]))
-                            v_type = ai_data.get("vehicle_type", "CAR")
-                            conf = float(ai_data.get("confidence", 0.94))
-                            cloud_url = ai_data.get("image_url")
-                            if cloud_url:
-                                try:
-                                    import cloudinary_storage
-                                    cloudinary_storage._CDN_MAP[filename] = cloud_url
-                                except Exception:
-                                    pass
+            try:
+                import requests
+                # 50s timeout: plenty of buffer for Cloudflare tunnel & Colab GPU inference
+                resp = requests.post(
+                    f"{ai_backend}/predict_image",
+                    files={"file": (filename, raw_bytes, "image/jpeg")},
+                    timeout=50
+                )
+                if resp.status_code == 200:
+                    ai_data = resp.json()
+                    if ai_data.get("success"):
+                        p_plate = ai_data.get("plate_number")
+                        has_plate = ai_data.get("has_plate", bool(p_plate and p_plate not in ["NONE", "UNPLATED"]))
+                        v_type = ai_data.get("vehicle_type", "CAR")
+                        conf = float(ai_data.get("confidence", 0.94))
+                        cloud_url = ai_data.get("image_url")
+                        if cloud_url:
+                            try:
+                                import cloudinary_storage
+                                cloudinary_storage._CDN_MAP[filename] = cloud_url
+                            except Exception:
+                                pass
 
-                            if has_plate and p_plate and p_plate not in ["NONE", "UNPLATED"]:
-                                plates_found.append({
-                                    "plate": p_plate,
-                                    "confidence": conf,
-                                    "vehicle_type": v_type,
-                                    "box": [50, 50, 400, 300],
-                                    "plate_color": "WHITE",
-                                    "category": "Private Vehicle",
-                                    "violation": "NONE",
-                                    "camera_id": "CAM_LIVE",
-                                    "environmental_condition": "NORMAL",
-                                    "quality_score": 0.96,
-                                    "device": ai_data.get("device", "cuda")
-                                })
-                                print(f"[AI Backend] Real plate detected on Colab GPU: {p_plate} ({conf})")
-                            else:
-                                print(f"[AI Backend] No plate detected on vehicle on Colab GPU -> triggering Unplated Forensic Profiler")
-                                plates_found = []
+                        if has_plate and p_plate and p_plate not in ["NONE", "UNPLATED"]:
+                            plates_found.append({
+                                "plate": p_plate,
+                                "confidence": conf,
+                                "vehicle_type": v_type,
+                                "box": [50, 50, 400, 300],
+                                "plate_color": "WHITE",
+                                "category": "Private Vehicle",
+                                "violation": "NONE",
+                                "camera_id": "CAM_LIVE",
+                                "environmental_condition": "NORMAL",
+                                "quality_score": 0.96,
+                                "device": ai_data.get("device", "cuda")
+                            })
+                            print(f"[AI Backend] Real plate detected on Colab GPU: {p_plate} ({conf})")
+                        else:
+                            print(f"[AI Backend] No plate detected on vehicle on Colab GPU -> triggering Unplated Forensic Profiler")
+                            plates_found = []
 
-                            delegated_to_gpu = True
-                            break
-                except Exception as e:
-                    print(f"[AI Backend] Colab delegation note (attempt {attempt+1}): {e}")
+                        delegated_to_gpu = True
+            except Exception as e:
+                print(f"[AI Backend] Colab delegation note: {e}")
 
-        if not delegated_to_gpu:
+        # Decode frame using pure OpenCV only if needed for annotation (lightweight, ~10MB RAM)
+        if raw_bytes:
             try:
                 import cv2
                 import numpy as np
-                import anpr as anpr_module
-                import gc
-                try:
-                    import torch
-                    torch.set_num_threads(1)
-                    torch.set_num_interop_threads(1)
-                except Exception:
-                    pass
-
-                np_arr = np.frombuffer(raw_bytes, np.uint8)
-                frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                frame = cv2.imdecode(np.frombuffer(raw_bytes, np.uint8), cv2.IMREAD_COLOR)
                 if frame is not None:
-                    # Downscale uploads to max dimension 1024 to keep memory under 250MB on Render free tier
                     fh, fw = frame.shape[:2]
                     if max(fh, fw) > 1024:
                         scale = 1024.0 / max(fh, fw)
                         frame = cv2.resize(frame, (int(fw * scale), int(fh * scale)), interpolation=cv2.INTER_AREA)
+            except Exception:
+                frame = None
 
-                    # 1. Fast Primary Path: Direct single-pass OCR scan (< 180MB RAM, ~1.5s execution)
-                    reader = anpr_module.get_ocr()
-                    if reader is not None:
-                        try:
-                            raw = reader.readtext(frame, detail=1)
-                            # A. Single token plate match
-                            for box, txt, c in raw:
-                                clean_t = re.sub(r'[^A-Za-z0-9]', '', txt.upper())
-                                if clean_t.startswith('7') and len(clean_t) >= 10:
-                                    clean_t = 'T' + clean_t[1:]
-                                p_matches = anpr_module.extract_all_indian_plates_from_string(clean_t)
-                                if p_matches:
-                                    bx1 = max(0, int(min(pt[0] for pt in box)))
-                                    by1 = max(0, int(min(pt[1] for pt in box)))
-                                    bx2 = min(fw, int(max(pt[0] for pt in box)))
-                                    by2 = min(fh, int(max(pt[1] for pt in box)))
-                                    p_crop = frame[by1:by2, bx1:bx2] if (by2 > by1 and bx2 > bx1) else frame
-                                    p_col, p_cat = anpr_module.classify_plate_color_and_category(p_crop)
-                                    plates_found.append({
-                                        "plate": p_matches[0],
-                                        "confidence": round(float(c), 3),
-                                        "vehicle_type": "Car",
-                                        "bbox": (0, 0, fw, fh),
-                                        "plate_bbox": (bx1, by1, bx2, by2),
-                                        "plate_color": p_col,
-                                        "category": p_cat,
-                                        "violation": "NONE"
-                                    })
-                                    break
-
-                            # B. Merged tokens plate match
-                            if not plates_found:
-                                all_txt = ' '.join([txt for _, txt, _ in raw])
-                                p_matches = anpr_module.extract_all_indian_plates_from_string(all_txt)
-                                if p_matches:
-                                    plates_found.append({
-                                        "plate": p_matches[0],
-                                        "confidence": 0.88,
-                                        "vehicle_type": "Car",
-                                        "bbox": (0, 0, fw, fh),
-                                        "plate_bbox": (0, 0, fw, fh),
-                                        "plate_color": "WHITE",
-                                        "category": "Private Vehicle",
-                                        "violation": "NONE"
-                                    })
-                        except Exception as ocr_err:
-                            print(f"[Tracking API] Fast OCR note: {ocr_err}")
-
-                    # 2. Secondary Path: Only run YOLO if direct scan found no plate (to profile unplated vehicle)
-                    if not plates_found:
-                        yolo = get_yolo_model()
-                        if yolo is not None:
-                            try:
-                                results = yolo(frame, conf=0.20, verbose=False)
-                                plates_found = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
-                            except Exception as y_err:
-                                print(f"[Tracking API] YOLO inference note: {y_err}")
-
-                gc.collect()
-            except Exception as cv_err:
-                print(f"[Tracking API] CV2 note: {cv_err}")
+        # If not delegated to Colab GPU, NEVER load EasyOCR or PyTorch locally on Render!
+        # Render has only 512MB RAM — loading PyTorch triggers Out-Of-Memory SIGKILL (HTTP 502).
+        # We proceed safely to filename regex or unplated suspect profiling below.
+        if not delegated_to_gpu:
+            print("[Tracking API] AI backend unavailable or timed out — safely falling back to lightweight zero-RAM mode")
 
         # Check if filename contains a known plate pattern as fallback (e.g. OD02BA4455.jpg)
         filename_plate_match = re.search(r'[A-Za-z]{2}[0-9]{1,2}[A-Za-z]{0,3}[0-9]{3,4}', file.filename or "")
@@ -1211,15 +1147,16 @@ def register_tracking_routes(app):
 
 
 def _prewarm_ai_models():
-    """Pre-warms YOLO and EasyOCR in background on startup so first user upload is instant."""
+    """Pings AI backend GPU on startup. NEVER loads PyTorch on Render to protect 512MB RAM."""
     def _worker():
-        try:
-            get_yolo_model()
-            import anpr
-            anpr.get_ocr()
-            print("[Tracking API] AI Vision models (YOLOv8 + EasyOCR) pre-warmed & ready for instant inference.")
-        except Exception as e:
-            print(f"[Tracking API] Pre-warm note: {e}")
+        ai_backend = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
+        if ai_backend:
+            try:
+                import requests
+                r = requests.get(f"{ai_backend}/", timeout=10)
+                print(f"[Tracking API] Colab GPU AI engine connection verified: {r.json()}")
+            except Exception as e:
+                print(f"[Tracking API] Colab GPU connection note: {e}")
     threading.Thread(target=_worker, daemon=True).start()
 
 

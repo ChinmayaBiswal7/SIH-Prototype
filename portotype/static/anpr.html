@@ -215,6 +215,8 @@ html,body{width:100%;height:100%;background:#020617;color:#f8fafc;font-family:-a
         </div>
         <div class="stream-container" id="stream-box">
           <img id="live-img" src="" style="display:none"/>
+          <video id="webcam-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;background:#000;border-radius:4px;"></video>
+          <canvas id="webcam-canvas" style="display:none;"></canvas>
           <div class="stream-placeholder" id="placeholder">
             <i class="fa-solid fa-video-slash"></i>
             <div>Camera standby. Click <b>"Start Webcam"</b>, <b>"Upload MP4 Video"</b>, or <b>"Upload Photo"</b>.</div>
@@ -225,7 +227,12 @@ html,body{width:100%;height:100%;background:#020617;color:#f8fafc;font-family:-a
       <!-- STREAM CONTROLS & STATUS -->
       <div class="controls-bar">
         <div class="ctrl-grp">
-          <span style="font-size:.8rem;color:#94a3b8"><i class="fa-solid fa-circle-dot" style="color:#22c55e"></i> Edge Inference Active &bull; Point webcam or upload a car image / CCTV video stream.</span>
+          <span id="cctv-status-indicator" style="font-size:.8rem;color:#94a3b8"><i class="fa-solid fa-circle-dot" style="color:#22c55e"></i> Edge Inference Active &bull; Point webcam or upload a car image / CCTV video stream.</span>
+        </div>
+        <div class="ctrl-grp" id="webcam-controls" style="display:none">
+          <button class="btn" style="padding:4px 10px;font-size:.76rem;background:#0284c7;color:#fff;border-color:#38bdf8" onclick="captureAndAnalyzeWebcamFrame(true)">
+            <i class="fa-solid fa-camera"></i> Scan Current View
+          </button>
         </div>
       </div>
     </section>
@@ -526,12 +533,34 @@ html,body{width:100%;height:100%;background:#020617;color:#f8fafc;font-family:-a
 <script>
 const API = window.location.origin;
 let isWebcamOn = false;
-
 let liveDetectionsList = [];
 let selectedPlateForModal = null;
 let pollTimer = null;
+let webcamStream = null;
+let webcamInterval = null;
+let isAnalyzingFrame = false;
 
 async function stopWebcamIfActive(){
+  if(webcamInterval){
+    clearInterval(webcamInterval);
+    webcamInterval = null;
+  }
+  if(webcamStream){
+    try{
+      webcamStream.getTracks().forEach(t => t.stop());
+    }catch(e){}
+    webcamStream = null;
+  }
+  const video = document.getElementById('webcam-video');
+  if(video){
+    video.srcObject = null;
+    video.style.display = 'none';
+  }
+  const ctrl = document.getElementById('webcam-controls');
+  if(ctrl) ctrl.style.display = 'none';
+  const statusInd = document.getElementById('cctv-status-indicator');
+  if(statusInd) statusInd.innerHTML = '<i class="fa-solid fa-circle-dot" style="color:#22c55e"></i> Edge Inference Active &bull; Point webcam or upload a car image / CCTV video stream.';
+
   if(isWebcamOn){
     try{ await fetch(API + '/api/anpr/stop', {method: 'POST'}); }catch(e){}
     isWebcamOn = false;
@@ -545,27 +574,129 @@ async function stopWebcamIfActive(){
 
 async function toggleWebcam(){
   const btn = document.getElementById('btn-toggle-cam');
+  const video = document.getElementById('webcam-video');
+  const img = document.getElementById('live-img');
+  const ph = document.getElementById('placeholder');
+  const ctrl = document.getElementById('webcam-controls');
+  const statusInd = document.getElementById('cctv-status-indicator');
+
   if(!isWebcamOn){
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting...';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting Cam...';
     try{
-      const res = await fetch(API + '/api/anpr/start', {method: 'POST'}).then(r=>r.json());
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        throw new Error("Webcam access requires a secure connection (HTTPS) or your browser does not support camera API.");
+      }
+
+      webcamStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: "environment"
+        },
+        audio: false
+      });
+
+      video.srcObject = webcamStream;
+      await video.play();
+
       isWebcamOn = true;
       btn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Webcam';
       btn.className = 'btn danger';
-      document.getElementById('placeholder').style.display = 'none';
-      const img = document.getElementById('live-img');
-      img.src = '';
-      img.src = API + '/api/video_feed?t=' + Date.now();
-      img.style.display = 'block';
+
+      ph.style.display = 'none';
+      img.style.display = 'none';
+      video.style.display = 'block';
+      if(ctrl) ctrl.style.display = 'flex';
+      if(statusInd) statusInd.innerHTML = '<i class="fa-solid fa-circle-play" style="color:#22c55e"></i> <b>CCTV Active</b> &bull; Scanning live frames every 2.5s. Point camera at vehicles.';
+
+      try{ await fetch(API + '/api/anpr/start', {method: 'POST'}); }catch(e){}
+
+      // Start automatic live CCTV continuous scanning loop
+      startWebcamDetectionLoop();
     }catch(e){
+      console.error("Webcam activation error:", e);
       btn.innerHTML = '<i class="fa-solid fa-video"></i> Start Webcam';
       btn.className = 'btn primary';
-      alert('Could not start webcam. Please ensure camera is connected.');
+      alert('Could not access your webcam: ' + (e.message || 'Please grant camera permission in your browser.'));
     }
   }else{
     await stopWebcamIfActive();
     document.getElementById('live-img').style.display = 'none';
     document.getElementById('placeholder').style.display = 'flex';
+  }
+}
+
+function startWebcamDetectionLoop(){
+  if(webcamInterval) clearInterval(webcamInterval);
+  // Initial scan after 1.2s, then every 2.5s
+  setTimeout(() => { if(isWebcamOn) captureAndAnalyzeWebcamFrame(); }, 1200);
+  webcamInterval = setInterval(() => {
+    if(isWebcamOn && !isAnalyzingFrame){
+      captureAndAnalyzeWebcamFrame();
+    }
+  }, 2500);
+}
+
+async function captureAndAnalyzeWebcamFrame(manual = false){
+  const video = document.getElementById('webcam-video');
+  const canvas = document.getElementById('webcam-canvas');
+  if(!video || video.readyState < 2 || !isWebcamOn) return;
+  if(isAnalyzingFrame && !manual) return;
+
+  isAnalyzingFrame = true;
+  const statusInd = document.getElementById('cctv-status-indicator');
+  if(manual && statusInd){
+    statusInd.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#38bdf8"></i> <b>Analyzing CCTV Frame...</b>';
+  }
+
+  try{
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    await new Promise((resolve) => {
+      canvas.toBlob(async (blob) => {
+        if(!blob || !isWebcamOn){
+          resolve();
+          return;
+        }
+        const fd = new FormData();
+        fd.append('file', blob, 'webcam_cctv.jpg');
+
+        try{
+          const response = await fetch(API + '/api/anpr/upload', {method: 'POST', body: fd});
+          if(response.ok){
+            const res = await response.json();
+            if(res.success && res.detections && res.detections.length){
+              // Merge newly detected plates into live feed (avoid duplicate spam)
+              let hasNew = false;
+              for(const d of res.detections){
+                const exists = liveDetectionsList.some(existing => existing.plate === d.plate);
+                if(!exists){
+                  liveDetectionsList.unshift(d);
+                  hasNew = true;
+                }
+              }
+              if(hasNew){
+                renderAllCards(liveDetectionsList);
+                document.getElementById('card-count').textContent = liveDetectionsList.length + ' Detected';
+              }
+            }
+          }
+        }catch(err){
+          console.warn("Live CCTV detection sync note:", err);
+        }
+        resolve();
+      }, 'image/jpeg', 0.82);
+    });
+  }catch(err){
+    console.warn("Frame capture note:", err);
+  }finally{
+    isAnalyzingFrame = false;
+    if(statusInd && isWebcamOn){
+      statusInd.innerHTML = '<i class="fa-solid fa-circle-play" style="color:#22c55e"></i> <b>CCTV Active</b> &bull; Scanning live frames every 2.5s. Point camera at vehicles.';
+    }
   }
 }
 

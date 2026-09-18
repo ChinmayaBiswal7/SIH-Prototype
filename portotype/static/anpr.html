@@ -920,7 +920,8 @@ function renderAllCards(items){
     const timeStr = new Date(d.last_seen || d.timestamp).toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
     const confPct = ((d.confidence || 0.95) * 100).toFixed(1) + '%';
     const snapCount = (d.snapshots && d.snapshots.length) ? d.snapshots.length : 1;
-    const thumbUrl = d.image_path || (d.snapshots && d.snapshots[0]) || '/api/snapshot/test_cctv.jpg';
+    const rawThumb = d.image_path || (d.snapshots && d.snapshots[0]) || '';
+    const thumbUrl = rawThumb.startsWith('http') ? rawThumb : (rawThumb ? (rawThumb.startsWith('/') ? API + rawThumb : API + '/' + rawThumb) : API + '/api/snapshot/test_cctv.jpg');
 
     const pColor = d.plate_color || 'WHITE';
     const pCat = d.category || 'Private Vehicle';
@@ -948,7 +949,7 @@ function renderAllCards(items){
 
     card.innerHTML = `
       <div class="card-thumb">
-        <img src="${thumbUrl}" onerror="this.src='/api/snapshot/test_cctv.jpg'"/>
+        <img src="${thumbUrl}" onerror="this.onerror=null; this.src='${API}/api/snapshot/test_cctv.jpg'"/>
       </div>
       <div class="card-body">
         <div class="card-top">
@@ -995,7 +996,8 @@ async function clearFeed(){
 
 async function openInspectModal(d){
   selectedPlateForModal = d.plate;
-  const initialSnap = d.image_path || (d.snapshots && d.snapshots[0]) || '/api/snapshot/test_cctv.jpg';
+  const rawInitial = d.image_path || (d.snapshots && d.snapshots[0]) || '';
+  const initialSnap = rawInitial.startsWith('http') ? rawInitial : (rawInitial ? (rawInitial.startsWith('/') ? API + rawInitial : API + '/' + rawInitial) : API + '/api/snapshot/test_cctv.jpg');
   document.getElementById('m-snap').src = initialSnap;
   document.getElementById('m-hero-plate').textContent = d.plate;
 

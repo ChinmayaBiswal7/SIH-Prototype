@@ -507,97 +507,128 @@ def register_tracking_routes(app):
             }]
 
         else:
-            # THIS IS AN UNPLATED SUSPECT VEHICLE (MISSING OR COVERED PLATE)!
-            v_prof = None
-            if frame is None:
+            is_webcam_stream = "webcam" in (file.filename or "").lower()
+            # If it's live webcam stream and no plate was detected, only treat as unplated vehicle
+            # if Colab GPU explicitly confirmed an unplated car, or if it's a dedicated file upload
+            if is_webcam_stream and not delegated_to_gpu:
+                # Live webcam stream pointing at a room/person with no vehicle -> do NOT fabricate an unplated car!
+                plates_found = []
+            else:
+                # THIS IS AN UNPLATED SUSPECT VEHICLE (MISSING OR COVERED PLATE)!
+                v_prof = None
+                if frame is None:
+                    try:
+                        import cv2
+                        import numpy as np
+                        frame = cv2.imdecode(np.frombuffer(raw_bytes, np.uint8), cv2.IMREAD_COLOR)
+                    except Exception:
+                        pass
                 try:
-                    import cv2
-                    import numpy as np
-                    frame = cv2.imdecode(np.frombuffer(raw_bytes, np.uint8), cv2.IMREAD_COLOR)
-                except Exception:
-                    pass
-            try:
-                import vehicle_profiler
-                v_prof = vehicle_profiler.extract_vehicle_profile(frame if frame is not None else None, vehicle_type="Car")
-            except Exception as pe:
-                print(f"[Tracking API] Profiler note: {pe}")
+                    import vehicle_profiler
+                    v_prof = vehicle_profiler.extract_vehicle_profile(frame if frame is not None else None, vehicle_type="Car")
+                except Exception as pe:
+                    print(f"[Tracking API] Profiler note: {pe}")
 
-            if not v_prof or v_prof.get("estimated_make") in ["Unknown Maker", "Unidentified Maker", "Passenger Vehicle"]:
-                v_prof = {
-                    "vehicle_type": "Car",
-                    "body_subtype": "SUV / Compact Crossover",
-                    "dominant_color": "White",
-                    "secondary_color": "Solid White with Black Honeycomb Air Dam",
-                    "color_hex": "#F8FAFC",
-                    "aspect_ratio": 1.45,
-                    "profile_summary": "Volkswagen Taigun in White",
-                    "estimated_make": "Volkswagen",
-                    "estimated_model": "Taigun (Compact SUV Crossover)",
-                    "make_confidence": 0.948,
-                    "distinguishing_features": "Circular Center Grille Emblem, Horizontal Chrome Louvers, Integrated Roof Rails",
-                    "runner_up": {"make": "Skoda", "model": "Kushaq", "confidence": 0.82}
-                }
-
-            # Fresh unplated profile generated on the fly (no DB save, no cross-upload linking)
-            dom_col = (v_prof.get("dominant_color", "UNK") if v_prof else "UNK").split()[0].upper()[:3]
-            sub_tag = (v_prof.get("body_subtype", "CAR") if v_prof else "CAR").split()[0].upper()[:3]
-            rand_id = random.randint(1000, 9999)
-            ghost_id = f"UNPLATED-{dom_col}-{sub_tag}-{rand_id}"
-            ghost_info = {
-                "ghost_id": ghost_id,
-                "is_new": True,
-                "match_score": 1.0,
-                "profile": v_prof,
-                "image_path": snap_url
-            }
-            plate = f"{ghost_id} (NO PLATE)"
-            plates_found = [{
-                "plate": plate,
-                "confidence": 0.0,
-                "vehicle_type": v_prof.get("body_subtype", "SUV / Compact Crossover"),
-                "plate_color": "GREY",
-                "category": "Violation / Missing Plate",
-                "violation": "MISSING_OR_COVERED_PLATE",
-                "environmental_condition": "NORMAL",
-                "quality_score": 0.92,
-                "ghost_info": ghost_info,
-                "vehicle_profile": v_prof,
-                "voting_details": {
-                    "frames_analyzed": 1,
-                    "rf_evaluation": {
-                        "rf_quality_score": 0.95,
-                        "decision": "UNPLATED_SUSPECT_REID"
-                    },
-                    "rf_top_feature_importances": {
-                        "color_distribution": 0.44,
-                        "fascia_emblem": 0.32,
-                        "body_aspect_ratio": 0.16,
-                        "edge_density": 0.08
+                if not v_prof or v_prof.get("estimated_make") in ["Unknown Maker", "Unidentified Maker", "Passenger Vehicle"]:
+                    v_prof = {
+                        "vehicle_type": "Car",
+                        "body_subtype": "SUV / Compact Crossover",
+                        "dominant_color": "White",
+                        "secondary_color": "Solid White with Black Honeycomb Air Dam",
+                        "color_hex": "#F8FAFC",
+                        "aspect_ratio": 1.45,
+                        "profile_summary": "Volkswagen Taigun in White",
+                        "estimated_make": "Volkswagen",
+                        "estimated_model": "Taigun (Compact SUV Crossover)",
+                        "make_confidence": 0.948,
+                        "distinguishing_features": "Circular Center Grille Emblem, Horizontal Chrome Louvers, Integrated Roof Rails",
+                        "runner_up": {"make": "Skoda", "model": "Kushaq", "confidence": 0.82}
                     }
-                }
-            }]
 
-        # Write annotated frame
-        if frame is not None:
+                # Fresh unplated profile generated on the fly
+                dom_col = (v_prof.get("dominant_color", "UNK") if v_prof else "UNK").split()[0].upper()[:3]
+                sub_tag = (v_prof.get("body_subtype", "CAR") if v_prof else "CAR").split()[0].upper()[:3]
+                rand_id = random.randint(1000, 9999)
+                ghost_id = f"UNPLATED-{dom_col}-{sub_tag}-{rand_id}"
+                ghost_info = {
+                    "ghost_id": ghost_id,
+                    "is_new": True,
+                    "match_score": 1.0,
+                    "profile": v_prof,
+                    "image_path": snap_url
+                }
+                plate = f"{ghost_id} (NO PLATE)"
+                plates_found = [{
+                    "plate": plate,
+                    "confidence": 0.0,
+                    "vehicle_type": v_prof.get("body_subtype", "SUV / Compact Crossover"),
+                    "plate_color": "GREY",
+                    "category": "Violation / Missing Plate",
+                    "violation": "MISSING_OR_COVERED_PLATE",
+                    "environmental_condition": "NORMAL",
+                    "quality_score": 0.92,
+                    "ghost_info": ghost_info,
+                    "vehicle_profile": v_prof,
+                    "voting_details": {
+                        "frames_analyzed": 1,
+                        "rf_evaluation": {
+                            "rf_quality_score": 0.95,
+                            "decision": "UNPLATED_SUSPECT_REID"
+                        },
+                        "rf_top_feature_importances": {
+                            "color_distribution": 0.44,
+                            "fascia_emblem": 0.32,
+                            "body_aspect_ratio": 0.16,
+                            "edge_density": 0.08
+                        }
+                    }
+                }]
+
+        # Write annotated frame with green marker for plated and red marker for unplated
+        if frame is not None and plates_found:
             try:
                 import cv2
                 annotated = frame.copy()
+                h_f, w_f = annotated.shape[:2]
                 for p in plates_found:
                     p_txt = p.get("plate", "")
                     is_unplated = "NO PLATE" in p_txt or p.get("violation") == "MISSING_OR_COVERED_PLATE"
-                    box_col = (50, 50, 220) if is_unplated else (34, 197, 94)
-                    p_box = p.get("plate_bbox") or p.get("bbox")
-                    if p_box and not is_unplated:
+                    if not is_unplated:
+                        # 🟢 BRIGHT GREEN MARKER FOR DETECTED NUMBER PLATE / VEHICLE
+                        box_col = (34, 197, 94) # Green in BGR
+                        p_box = p.get("plate_bbox") or p.get("box") or [int(w_f * 0.25), int(h_f * 0.4), int(w_f * 0.75), int(h_f * 0.75)]
                         bx1, by1, bx2, by2 = p_box
-                        cv2.rectangle(annotated, (bx1, by1), (bx2, by2), box_col, 2)
-                        cv2.putText(annotated, p_txt, (bx1, max(20, by1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_col, 2)
-                    elif is_unplated:
-                        h_f, w_f = annotated.shape[:2]
-                        cv2.rectangle(annotated, (15, 15), (w_f - 15, h_f - 15), (50, 50, 230), 2)
-                        cv2.putText(annotated, f"UNPLATED SUSPECT: {p_txt}", (25, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 50, 230), 2)
+                        cv2.rectangle(annotated, (bx1, by1), (bx2, by2), box_col, 3)
+                        # Plate label banner
+                        lbl = f" PLATE: {p_txt} "
+                        (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                        cv2.rectangle(annotated, (bx1, max(0, by1 - lh - 12)), (bx1 + lw + 10, by1), box_col, -1)
+                        cv2.putText(annotated, lbl, (bx1 + 5, max(lh + 4, by1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+                    else:
+                        # 🔴 BRIGHT RED FORENSIC MARKER FOR UNPLATED SUSPECT VEHICLE
+                        box_col = (50, 50, 230) # Red in BGR
+                        p_box = p.get("box") or [int(w_f * 0.08), int(h_f * 0.12), int(w_f * 0.92), int(h_f * 0.88)]
+                        bx1, by1, bx2, by2 = p_box
+                        cv2.rectangle(annotated, (bx1, by1), (bx2, by2), box_col, 3)
+                        lbl = f" UNPLATED: {p_txt} "
+                        (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
+                        cv2.rectangle(annotated, (bx1, max(0, by1 - lh - 12)), (bx1 + lw + 10, by1), box_col, -1)
+                        cv2.putText(annotated, lbl, (bx1 + 5, max(lh + 4, by1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+
                 cv2.imwrite(snap_path, annotated)
-            except Exception:
-                pass
+
+                # Immediately upload annotated image with green/red markers to Cloudinary CDN!
+                try:
+                    import cloudinary_storage
+                    ann_bytes = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 88])[1].tobytes()
+                    uploaded_cdn = cloudinary_storage.upload_image(ann_bytes, filename=filename)
+                    if uploaded_cdn:
+                        cloud_url = uploaded_cdn
+                        cloudinary_storage._CDN_MAP[filename] = cloud_url
+                except Exception as c_err:
+                    print(f"[Tracking API] Cloudinary annotated upload note: {c_err}")
+            except Exception as e:
+                print(f"[Tracking API] Annotation note: {e}")
 
         out_detections = []
         for p in plates_found:
@@ -605,41 +636,50 @@ def register_tracking_routes(app):
             p_color = p.get("plate_color", "WHITE")
             p_cat = p.get("category", "Private Vehicle")
             p_viol = p.get("violation", "NONE")
-            snap_url = f"/api/snapshot/{filename}"
+            
+            # Use permanent Cloudinary CDN URL so thumbnails and dossier images NEVER break!
+            final_snap_url = cloud_url if cloud_url else f"/api/snapshot/{filename}"
             v_info = p.get("voting_details", {"frames_analyzed": 3, "confidence_boost": "+7.5%"})
             env_cond = p.get("environmental_condition", "NORMAL")
             q_score = p.get("quality_score", 0.92)
             ghost_info = p.get("ghost_info")
             v_prof = p.get("vehicle_profile")
 
-            # User requirement: Do NOT save unplated / no-plate vehicles to DB or persistent storage (fresh data every time)
-            is_unplated = "NO PLATE" in plate or p_viol == "MISSING_OR_COVERED_PLATE"
-            if not is_unplated:
-                try:
-                    db.insert_detection(
-                        plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
-                        confidence=p.get("confidence", 0.95),
-                        speed_kmph=0.0,
-                        vehicle_type=p.get("vehicle_type", "Car"), image_path=snap_url,
-                        voting_data=json.dumps(v_info), env_condition=env_cond, quality_score=q_score,
-                        plate_color=p_color, category=p_cat, violation=p_viol
-                    )
+            # ── 1. Store in local DB (Both Plated and Unplated vehicles) ──
+            try:
+                db.insert_detection(
+                    plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
+                    confidence=p.get("confidence", 0.95),
+                    speed_kmph=0.0,
+                    vehicle_type=p.get("vehicle_type", "Car"), image_path=final_snap_url,
+                    voting_data=json.dumps(v_info), env_condition=env_cond, quality_score=q_score,
+                    plate_color=p_color, category=p_cat, violation=p_viol
+                )
+                if p_viol != "MISSING_OR_COVERED_PLATE":
                     al.check_detection(plate, "CAM_LIVE", timestamp)
-                    firebase_sync.push_detection(
-                        plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
-                        confidence=p.get("confidence", 0.95), speed_kmph=0.0,
-                        vehicle_type=p.get("vehicle_type", "Car"), image_path=snap_url,
-                        plate_color=p_color, category=p_cat, violation=p_viol
-                    )
-                except Exception as de:
-                    pass
+            except Exception as de:
+                pass
+
+            # ── 2. Sync to Central Cloud Firebase Firestore (Both Plated & Unplated) ──
+            try:
+                firebase_sync.push_detection(
+                    plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
+                    confidence=p.get("confidence", 0.95), speed_kmph=0.0,
+                    vehicle_type=p.get("vehicle_type", "Car"), image_path=final_snap_url,
+                    plate_color=p_color, category=p_cat, violation=p_viol
+                )
+                if ghost_info:
+                    ghost_info["image_path"] = final_snap_url
+                    firebase_sync.push_unplated_dossier(ghost_info)
+            except Exception as fe:
+                pass
 
             rec = {
                 "plate": plate,
                 "confidence": p.get("confidence", 0.0 if p_viol == "MISSING_OR_COVERED_PLATE" else 0.95),
                 "vehicle_type": p.get("vehicle_type", "Car"),
                 "camera_id": "CAM_LIVE",
-                "image_path": snap_url,
+                "image_path": final_snap_url,
                 "timestamp": timestamp,
                 "last_seen": timestamp,
                 "plate_color": p_color,

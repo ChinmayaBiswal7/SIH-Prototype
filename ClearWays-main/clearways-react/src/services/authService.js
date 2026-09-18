@@ -14,6 +14,14 @@ export const AUTHORIZED_TEAM_MEMBERS = [
     department: "Traffic Operations"
   },
   {
+    email: "2401483@kiit.ac.in",
+    password: "9692308808",
+    name: "",
+    role: "System Operator",
+    badge: "",
+    department: "Traffic Operations"
+  },
+  {
     email: "24051496@kiit.ac.in",
     password: "trAckMaker",
     name: "",

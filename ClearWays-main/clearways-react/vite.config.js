@@ -10,6 +10,18 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
+      '/anpr': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      '/live': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      '/dossier': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
     },
   },
 })

@@ -1170,6 +1170,17 @@ function trackFromModal(){
   window.location.href = '/?track=' + encodeURIComponent(selectedPlateForModal);
 }
 
+// Clean up temporary backend session data when user leaves or closes the page
+window.addEventListener('beforeunload', () => {
+  try {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(API + '/api/anpr/clear');
+    } else {
+      fetch(API + '/api/anpr/clear', {method: 'POST', keepalive: true});
+    }
+  } catch(e) {}
+});
+
 // Auto-clear stale session data on every page load — always start fresh
 (async () => {
   try { await fetch(API + '/api/anpr/clear', {method: 'POST'}); } catch(e) {}

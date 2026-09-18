@@ -65,6 +65,106 @@ _video_jobs = {}
 _video_jobs_lock = threading.Lock()
 _upload_yolo_model = None
 
+# Thread-safe in-memory temporary session snapshot cache (max 35 items)
+_session_snapshots_lock = threading.Lock()
+_SESSION_SNAPSHOTS = {}
+_SESSION_SNAPSHOT_ORDER = []
+
+def save_session_snapshot(filename, img_bytes):
+    with _session_snapshots_lock:
+        _SESSION_SNAPSHOTS[filename] = img_bytes
+        _SESSION_SNAPSHOT_ORDER.append(filename)
+        while len(_SESSION_SNAPSHOT_ORDER) > 35:
+            old_f = _SESSION_SNAPSHOT_ORDER.pop(0)
+            _SESSION_SNAPSHOTS.pop(old_f, None)
+            try:
+                old_p = os.path.join(SNAPSHOT_DIR, old_f)
+                if os.path.exists(old_p):
+                    os.remove(old_p)
+            except Exception:
+                pass
+
+def get_session_snapshot(filename):
+    with _session_snapshots_lock:
+        return _SESSION_SNAPSHOTS.get(filename)
+
+def clear_session_snapshots():
+    with _session_snapshots_lock:
+        for fname in list(_SESSION_SNAPSHOTS.keys()):
+            try:
+                fpath = os.path.join(SNAPSHOT_DIR, fname)
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+            except Exception:
+                pass
+        _SESSION_SNAPSHOTS.clear()
+        _SESSION_SNAPSHOT_ORDER.clear()
+
+def draw_vehicle_annotations(frame, detections):
+    """
+    Draws high-visibility green bounding box for plated vehicles and red box for unplated vehicles.
+    Marks the car and its license plate clearly with contrast banners.
+    """
+    if frame is None or getattr(frame, 'size', 0) == 0:
+        return frame
+    try:
+        import cv2
+        annotated = frame.copy()
+        h_f, w_f = annotated.shape[:2]
+
+        for p in detections:
+            p_txt = p.get("plate", "")
+            is_unplated = "NO PLATE" in p_txt or p.get("violation") == "MISSING_OR_COVERED_PLATE"
+
+            if not is_unplated:
+                # 🟢 BRIGHT GREEN MARKER FOR DETECTED VEHICLE & NUMBER PLATE
+                box_col = (34, 197, 94)  # BGR Emerald Green
+                
+                # Bounding box around the car
+                car_box = p.get("box") or [int(w_f * 0.12), int(h_f * 0.16), int(w_f * 0.88), int(h_f * 0.86)]
+                cx1, cy1, cx2, cy2 = car_box
+                cx1 = max(0, min(w_f - 2, int(cx1)))
+                cy1 = max(0, min(h_f - 2, int(cy1)))
+                cx2 = max(cx1 + 10, min(w_f - 1, int(cx2)))
+                cy2 = max(cy1 + 10, min(h_f - 1, int(cy2)))
+
+                cv2.rectangle(annotated, (cx1, cy1), (cx2, cy2), box_col, 3)
+
+                # Plate header banner
+                lbl = f" PLATE: {p_txt} "
+                (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                banner_top = max(0, cy1 - lh - 12)
+                cv2.rectangle(annotated, (cx1, banner_top), (min(w_f, cx1 + lw + 14), cy1), box_col, -1)
+                cv2.putText(annotated, lbl, (cx1 + 6, max(lh + 4, cy1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+
+                # If specific plate coordinates are known, also highlight the plate itself
+                if p.get("plate_bbox"):
+                    px1, py1, px2, py2 = p["plate_bbox"]
+                    px1, py1 = max(0, int(px1)), max(0, int(py1))
+                    px2, py2 = min(w_f - 1, int(px2)), min(h_f - 1, int(py2))
+                    cv2.rectangle(annotated, (px1, py1), (px2, py2), (0, 255, 128), 2)
+            else:
+                # 🔴 BRIGHT NEON-RED FORENSIC MARKER FOR UNPLATED SUSPECT VEHICLE
+                box_col = (50, 50, 230)  # BGR Red
+                car_box = p.get("box") or [int(w_f * 0.08), int(h_f * 0.12), int(w_f * 0.92), int(h_f * 0.88)]
+                cx1, cy1, cx2, cy2 = car_box
+                cx1 = max(0, min(w_f - 2, int(cx1)))
+                cy1 = max(0, min(h_f - 2, int(cy1)))
+                cx2 = max(cx1 + 10, min(w_f - 1, int(cx2)))
+                cy2 = max(cy1 + 10, min(h_f - 1, int(cy2)))
+
+                cv2.rectangle(annotated, (cx1, cy1), (cx2, cy2), box_col, 3)
+                lbl = f" UNPLATED: {p_txt} "
+                (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
+                banner_top = max(0, cy1 - lh - 12)
+                cv2.rectangle(annotated, (cx1, banner_top), (min(w_f, cx1 + lw + 14), cy1), box_col, -1)
+                cv2.putText(annotated, lbl, (cx1 + 6, max(lh + 4, cy1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+
+        return annotated
+    except Exception as ae:
+        print(f"[Tracking API] Annotation error: {ae}")
+        return frame
+
 _LIVE_AI_BACKEND_URL = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
 
 def get_ai_backend_url():
@@ -289,7 +389,8 @@ def register_tracking_routes(app):
             db.clear_live_db()
             with _cam_lock:
                 _latest_live_detections.clear()
-            return jsonify({"success": True, "message": "Backend database and detection cache cleared successfully."})
+            clear_session_snapshots()
+            return jsonify({"success": True, "message": "Backend database, detection cache, and session snapshots cleared successfully."})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
@@ -584,51 +685,19 @@ def register_tracking_routes(app):
                     }
                 }]
 
-        # Write annotated frame with green marker for plated and red marker for unplated
+        # Annotate frame with high-contrast green marker for plated and red marker for unplated
         if frame is not None and plates_found:
             try:
                 import cv2
-                annotated = frame.copy()
-                h_f, w_f = annotated.shape[:2]
-                for p in plates_found:
-                    p_txt = p.get("plate", "")
-                    is_unplated = "NO PLATE" in p_txt or p.get("violation") == "MISSING_OR_COVERED_PLATE"
-                    if not is_unplated:
-                        # 🟢 BRIGHT GREEN MARKER FOR DETECTED NUMBER PLATE / VEHICLE
-                        box_col = (34, 197, 94) # Green in BGR
-                        p_box = p.get("plate_bbox") or p.get("box") or [int(w_f * 0.25), int(h_f * 0.4), int(w_f * 0.75), int(h_f * 0.75)]
-                        bx1, by1, bx2, by2 = p_box
-                        cv2.rectangle(annotated, (bx1, by1), (bx2, by2), box_col, 3)
-                        # Plate label banner
-                        lbl = f" PLATE: {p_txt} "
-                        (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                        cv2.rectangle(annotated, (bx1, max(0, by1 - lh - 12)), (bx1 + lw + 10, by1), box_col, -1)
-                        cv2.putText(annotated, lbl, (bx1 + 5, max(lh + 4, by1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-                    else:
-                        # 🔴 BRIGHT RED FORENSIC MARKER FOR UNPLATED SUSPECT VEHICLE
-                        box_col = (50, 50, 230) # Red in BGR
-                        p_box = p.get("box") or [int(w_f * 0.08), int(h_f * 0.12), int(w_f * 0.92), int(h_f * 0.88)]
-                        bx1, by1, bx2, by2 = p_box
-                        cv2.rectangle(annotated, (bx1, by1), (bx2, by2), box_col, 3)
-                        lbl = f" UNPLATED: {p_txt} "
-                        (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
-                        cv2.rectangle(annotated, (bx1, max(0, by1 - lh - 12)), (bx1 + lw + 10, by1), box_col, -1)
-                        cv2.putText(annotated, lbl, (bx1 + 5, max(lh + 4, by1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
-
+                annotated = draw_vehicle_annotations(frame, plates_found)
+                ann_bytes = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 88])[1].tobytes()
+                # Store directly into in-memory temporary session snapshot store (instant serving, zero disk lag)
+                save_session_snapshot(filename, ann_bytes)
                 cv2.imwrite(snap_path, annotated)
-
-                # Immediately upload annotated image with green/red markers to Cloudinary CDN!
-                try:
-                    import cloudinary_storage
-                    ann_bytes = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 88])[1].tobytes()
-                    uploaded_cdn = cloudinary_storage.upload_image(ann_bytes, filename=filename)
-                    if uploaded_cdn:
-                        cloud_url = uploaded_cdn
-                        cloudinary_storage._CDN_MAP[filename] = cloud_url
-                except Exception as c_err:
-                    print(f"[Tracking API] Cloudinary annotated upload note: {c_err}")
             except Exception as e:
                 print(f"[Tracking API] Annotation note: {e}")
+
+        final_snap_url = f"/api/snapshot/{filename}"
 
         out_detections = []
         for p in plates_found:
@@ -637,15 +706,13 @@ def register_tracking_routes(app):
             p_cat = p.get("category", "Private Vehicle")
             p_viol = p.get("violation", "NONE")
             
-            # Use permanent Cloudinary CDN URL so thumbnails and dossier images NEVER break!
-            final_snap_url = cloud_url if cloud_url else f"/api/snapshot/{filename}"
             v_info = p.get("voting_details", {"frames_analyzed": 3, "confidence_boost": "+7.5%"})
             env_cond = p.get("environmental_condition", "NORMAL")
             q_score = p.get("quality_score", 0.92)
             ghost_info = p.get("ghost_info")
             v_prof = p.get("vehicle_profile")
 
-            # ── 1. Store in local DB (Both Plated and Unplated vehicles) ──
+            # ── 1. Store temporarily in local DB for active session queries ──
             try:
                 db.insert_detection(
                     plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
@@ -660,19 +727,8 @@ def register_tracking_routes(app):
             except Exception as de:
                 pass
 
-            # ── 2. Sync to Central Cloud Firebase Firestore (Both Plated & Unplated) ──
-            try:
-                firebase_sync.push_detection(
-                    plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
-                    confidence=p.get("confidence", 0.95), speed_kmph=0.0,
-                    vehicle_type=p.get("vehicle_type", "Car"), image_path=final_snap_url,
-                    plate_color=p_color, category=p_cat, violation=p_viol
-                )
-                if ghost_info:
-                    ghost_info["image_path"] = final_snap_url
-                    firebase_sync.push_unplated_dossier(ghost_info)
-            except Exception as fe:
-                pass
+            # NOTE: Per user request, detections are saved temporarily in backend memory ONLY
+            # while the user is active on the page, and NOT pushed to permanent Firebase Firestore.
 
             rec = {
                 "plate": plate,
@@ -763,13 +819,37 @@ def register_tracking_routes(app):
                     if v_resp.status_code == 200:
                         v_json = v_resp.json()
                         if v_json.get("success") and v_json.get("vehicles"):
-                            for v in v_json["vehicles"]:
+                            # Open uploaded video to extract high-resolution keyframes for visual annotation
+                            v_cap = None
+                            v_total_f = 30
+                            try:
+                                import cv2
+                                v_cap = cv2.VideoCapture(temp_vpath)
+                                v_total_f = int(v_cap.get(cv2.CAP_PROP_FRAME_COUNT)) if v_cap.isOpened() else 30
+                                if v_total_f <= 0:
+                                    v_total_f = 30
+                            except Exception:
+                                pass
+
+                            for idx, v in enumerate(v_json["vehicles"]):
                                 v_plate = v.get("plate")
                                 v_has = v.get("has_plate", False)
-                                v_img = v.get("image_url")
                                 v_viol = v.get("violation", "NONE" if v_has else "MISSING_OR_COVERED_PLATE")
                                 v_type = v.get("vehicle_type", "CAR")
                                 v_conf = float(v.get("confidence", 0.94 if v_has else 0.0))
+
+                                snap_name = f"cctv_{job_id}_{idx}.jpg"
+                                snap_path = os.path.join(SNAPSHOT_DIR, snap_name)
+                                snap_url = f"/api/snapshot/{snap_name}"
+
+                                # Extract keyframe from video corresponding to this vehicle
+                                ann_frame = None
+                                if v_cap and v_cap.isOpened():
+                                    target_pos = int(min(v_total_f - 1, max(1, (idx + 1) * (v_total_f // (len(v_json["vehicles"]) + 1)))))
+                                    v_cap.set(cv2.CAP_PROP_POS_FRAMES, target_pos)
+                                    ret, raw_vf = v_cap.read()
+                                    if ret and raw_vf is not None:
+                                        ann_frame = raw_vf
 
                                 if v_has and v_plate and "NO PLATE" not in v_plate:
                                     v_clean = v_plate.upper().replace(" ", "")
@@ -784,7 +864,7 @@ def register_tracking_routes(app):
                                         "confidence": v_conf,
                                         "vehicle_type": f"{v_rto.get('vehicle_maker', '')} {v_rto.get('vehicle_model', '')}".strip() or v_type,
                                         "camera_id": "CAM_CCTV_STREAM",
-                                        "image_path": v_img or f"/api/snapshot/vid_{job_id}.jpg",
+                                        "image_path": snap_url,
                                         "timestamp": timestamp,
                                         "last_seen": timestamp,
                                         "category": "Private Vehicle",
@@ -801,7 +881,7 @@ def register_tracking_routes(app):
                                         "confidence": 0.0,
                                         "vehicle_type": v_type,
                                         "camera_id": "CAM_CCTV_STREAM",
-                                        "image_path": v_img or f"/api/snapshot/vid_{job_id}.jpg",
+                                        "image_path": snap_url,
                                         "timestamp": timestamp,
                                         "last_seen": timestamp,
                                         "category": "Violation / Missing Plate",
@@ -810,9 +890,23 @@ def register_tracking_routes(app):
                                         "ghost_info": {"ghost_id": ghost_id, "is_new": True},
                                         "voting_details": {"frames_analyzed": 12, "confidence_boost": "+14.0% (Video Forensic Re-ID)"}
                                     }
+
+                                # 🟢 Draw bright green bounding box on the detected vehicle (or red if unplated)
+                                if ann_frame is not None:
+                                    try:
+                                        annotated_v = draw_vehicle_annotations(ann_frame, [rec])
+                                        v_bytes = cv2.imencode('.jpg', annotated_v, [int(cv2.IMWRITE_JPEG_QUALITY), 88])[1].tobytes()
+                                        save_session_snapshot(snap_name, v_bytes)
+                                        cv2.imwrite(snap_path, annotated_v)
+                                    except Exception as ann_err:
+                                        print(f"[Tracking API] Video keyframe annotation note: {ann_err}")
+
                                 detected_records.append(rec)
                                 with _cam_lock:
                                     _latest_live_detections.insert(0, rec)
+
+                            if v_cap:
+                                v_cap.release()
                             colab_video_done = True
                             print(f"[AI Backend] Successfully processed video on Colab GPU: {len(detected_records)} vehicles")
                 except Exception as v_err:
@@ -875,7 +969,10 @@ def register_tracking_routes(app):
                                 snap_name = f"{p_str}_{job_id}_{idx}.jpg"
                                 snap_path = os.path.join(SNAPSHOT_DIR, snap_name)
                                 try:
-                                    annotated_f = anpr_module.annotate_frame(frame.copy(), [pl])
+                                    # 🟢 Draw bright green bounding box on car and plate
+                                    annotated_f = draw_vehicle_annotations(frame.copy(), [pl])
+                                    ann_bytes = cv2.imencode('.jpg', annotated_f, [int(cv2.IMWRITE_JPEG_QUALITY), 88])[1].tobytes()
+                                    save_session_snapshot(snap_name, ann_bytes)
                                     cv2.imwrite(snap_path, annotated_f)
                                 except Exception:
                                     cv2.imwrite(snap_path, frame)
@@ -921,8 +1018,6 @@ def register_tracking_routes(app):
                         ghost_id = f"UNPLATED-{dom_col}-{sub_tag}-{rand_id}"
                         snap_name = f"unplated_{job_id}.jpg"
                         snap_path = os.path.join(SNAPSHOT_DIR, snap_name)
-                        if best_video_frame is not None:
-                            cv2.imwrite(snap_path, best_video_frame)
                         snap_url = f"/api/snapshot/{snap_name}"
 
                         rec = {
@@ -940,6 +1035,16 @@ def register_tracking_routes(app):
                             "vehicle_profile": v_prof,
                             "voting_details": {"frames_analyzed": len(key_positions), "confidence_boost": "+14.2% (Video Forensic Re-ID)"}
                         }
+                        if best_video_frame is not None:
+                            try:
+                                # 🔴 Draw bright red forensic marker on unplated vehicle
+                                annotated_u = draw_vehicle_annotations(best_video_frame.copy(), [rec])
+                                u_bytes = cv2.imencode('.jpg', annotated_u, [int(cv2.IMWRITE_JPEG_QUALITY), 88])[1].tobytes()
+                                save_session_snapshot(snap_name, u_bytes)
+                                cv2.imwrite(snap_path, annotated_u)
+                            except Exception:
+                                cv2.imwrite(snap_path, best_video_frame)
+
                         detected_records.append(rec)
                         with _cam_lock:
                             _latest_live_detections.insert(0, rec)
@@ -996,12 +1101,17 @@ def register_tracking_routes(app):
         _anpr_active = False
         return jsonify({"success": True, "status": "stopped"})
 
-    @app.route("/api/anpr/clear", methods=["POST"])
+    @app.route("/api/anpr/clear", methods=["GET", "POST"])
     def api_anpr_clear():
         global _latest_live_detections
         with _cam_lock:
             _latest_live_detections = []
-        return jsonify({"success": True, "message": "Live detections cleared"})
+        clear_session_snapshots()
+        try:
+            db.clear_live_db()
+        except Exception:
+            pass
+        return jsonify({"success": True, "message": "Live detections and temporary session snapshots cleared"})
 
     @app.route("/api/live_stream_detections")
     def api_live_stream_detections():
@@ -1154,7 +1264,16 @@ def register_tracking_routes(app):
         if filename.startswith("http://") or filename.startswith("https://"):
             return redirect(filename)
 
-        # Check Cloudinary CDN cache for permanent high-speed CDN serving
+        # 1. Primary: check in-memory temporary session snapshots (instant, zero disk lag, 100% reliable)
+        snap_bytes = get_session_snapshot(filename)
+        if snap_bytes:
+            return Response(snap_bytes, mimetype="image/jpeg", headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            })
+
+        # 2. Check Cloudinary CDN cache for permanent CDN serving
         try:
             import cloudinary_storage
             cdn_url = cloudinary_storage.get_cached_url(filename)

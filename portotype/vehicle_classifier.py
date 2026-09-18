@@ -123,17 +123,29 @@ def classify_vehicle(crop_img, aspect_ratio, dominant_color, body_subtype):
     for cand in all_models:
         score = 0.0
 
-        # Cue 1: Grille Architecture Match (Weight: 35%)
+        # Cue 1: Grille Architecture & Emblem Match (Weight: 35%)
         if cand["grille_type"] == cues["detected_grille_type"]:
             score += 0.35
         elif cues["has_circle_emblem"] and cand["emblem_shape"] == catalog.EMBLEM_CIRCLE:
             score += 0.28
-        elif cues["has_circle_emblem"] and cand["make"] == "Volkswagen":
-            score += 0.32
-        elif cues["detected_grille_type"] == catalog.GRILLE_VERTICAL_SLATS and cand["make"] == "Mahindra":
+        elif cues["has_star_emblem"] and cand["emblem_shape"] == catalog.EMBLEM_STAR_3:
+            score += 0.33
+        elif cues["detected_grille_type"] == catalog.GRILLE_VERTICAL_SLATS and cand["make"] in ["Mahindra", "Jeep"]:
+            score += 0.33
+        elif cues["detected_grille_type"] == catalog.GRILLE_PARAMETRIC_JEWEL and cand["make"] == "Hyundai":
             score += 0.34
+        elif cues["detected_grille_type"] == catalog.GRILLE_TIGER_NOSE and cand["make"] == "Kia":
+            score += 0.34
+        elif cues["detected_grille_type"] == catalog.GRILLE_HUMANITY_LINE and cand["make"] == "Tata Motors":
+            score += 0.33
+        elif cues["detected_grille_type"] == catalog.GRILLE_SOLID_WING and cand["make"] == "Honda":
+            score += 0.33
+        elif cues["detected_grille_type"] == catalog.GRILLE_TRAPEZOID_MASSIVE and cand["make"] == "Toyota":
+            score += 0.33
+        elif cues["detected_grille_type"] == catalog.GRILLE_BUTTERFLY_RIBBED and cand["make"] == "Skoda":
+            score += 0.33
         else:
-            score += 0.10
+            score += 0.12
 
         # Cue 2: Proportions & Aspect Ratio Match (Weight: 30%)
         ar_min, ar_max = cand["aspect_ratio"]
@@ -177,12 +189,6 @@ def classify_vehicle(crop_img, aspect_ratio, dominant_color, body_subtype):
     scores.sort(key=lambda x: x[1], reverse=True)
     top_cand, top_conf = scores[0]
     runner_cand, runner_conf = scores[1] if len(scores) > 1 else (None, 0.0)
-
-    # Special heuristic calibration for prominent Volkswagen frontal captures
-    if cues["has_circle_emblem"] and cues["chrome_density"] > 0.05 and cues["horizontal_edge_ratio"] > 0.40:
-        if aspect_ratio < 1.32 or "suv" in body_subtype.lower() or "hatchback" in body_subtype.lower():
-            top_cand = next((c for c, _ in scores if c["make"] == "Volkswagen" and c["model"] == "Taigun"), top_cand)
-            top_conf = 0.948
 
     runner_up_data = None
     if runner_cand:

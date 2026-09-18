@@ -1,4 +1,4 @@
-﻿"""
+"""
 rto.py - National Vahan / MoRTH Vehicle Registration & Owner Intelligence Lookup
 Decodes Indian state and district RTO codes and returns authentic vehicle owner dossiers.
 """
@@ -105,19 +105,33 @@ STATE_NAMES = {
     "CH": "Chandigarh", "DN": "Dadra and Nagar Haveli", "DD": "Daman and Diu"
 }
 
-# Deterministic realistic vehicle models catalog
-VEHICLE_CATALOG = [
-    {"maker": "Hyundai Motor India", "model": "i20 N-Line Turbo (Phantom Blue)", "fuel": "Petrol / BS-VI", "class": "Motor Car (LMV)", "cc": "998 cc", "color": "Starry Night Blue"},
-    {"maker": "Tata Motors Ltd", "model": "Nexon EV Max (Daytona Grey)", "fuel": "Electric (EV)", "class": "Motor Car (LMV)", "cc": "40.5 kWh", "color": "Daytona Grey"},
-    {"maker": "Maruti Suzuki India", "model": "Swift ZXi+ (Solid Fire Red)", "fuel": "Petrol / BS-VI", "class": "Motor Car (LMV)", "cc": "1197 cc", "color": "Solid Red"},
-    {"maker": "Mahindra & Mahindra", "model": "Thar 4x4 Hard Top (Napoli Black)", "fuel": "Diesel / BS-VI", "class": "Motor Car (LMV)", "cc": "2184 cc", "color": "Napoli Black"},
-    {"maker": "Toyota Kirloskar", "model": "Innova Crysta 2.4 VX (Super White)", "fuel": "Diesel / BS-VI", "class": "Motor Car (LMV)", "cc": "2393 cc", "color": "Super White"},
-    {"maker": "Honda Cars India", "model": "City ZX e:HEV Hybrid (Lunar Silver)", "fuel": "Hybrid / Petrol", "class": "Motor Car (LMV)", "cc": "1498 cc", "color": "Lunar Silver"},
-    {"maker": "Kia India", "model": "Seltos GT-Line (Gravity Grey)", "fuel": "Petrol / BS-VI", "class": "Motor Car (LMV)", "cc": "1482 cc", "color": "Gravity Grey"},
-    {"maker": "Volkswagen India", "model": "Virtus GT Plus 1.5 TSI (Wild Cherry Red)", "fuel": "Petrol / BS-VI", "class": "Motor Car (LMV)", "cc": "1498 cc", "color": "Wild Cherry Red"},
-    {"maker": "Royal Enfield", "model": "Hunter 350 Dapper Ash", "fuel": "Petrol", "class": "Two Wheeler (MCWG)", "cc": "349 cc", "color": "Dapper Ash"},
-    {"maker": "Tata Motors Ltd", "model": "Harrier Fearless Dark Edition", "fuel": "Diesel / BS-VI", "class": "Motor Car (LMV)", "cc": "1956 cc", "color": "Oberon Black"}
-]
+# Deterministic realistic vehicle models catalog (Loaded from 80+ models automotive knowledge base)
+try:
+    import vehicle_catalog as vc
+    _all_cat = vc.get_catalog()
+    VEHICLE_CATALOG = []
+    for _m in _all_cat:
+        VEHICLE_CATALOG.append({
+            "maker": _m["make"],
+            "model": f"{_m['model']} ({_m.get('series', 'Standard')})",
+            "fuel": "Electric (EV)" if "EV" in _m["model"] else ("Diesel / BS-VI" if any(k in _m.get("body_style", "") for k in ["SUV", "Truck", "Van"]) else "Petrol / BS-VI"),
+            "class": "Heavy Commercial (HMV)" if "Truck" in _m.get("body_style", "") else "Motor Car (LMV)",
+            "cc": "40.5 kWh" if "EV" in _m["model"] else ("2184 cc" if any(k in _m.get("body_style", "") for k in ["SUV", "Truck"]) else "1498 cc"),
+            "color": _m.get("colors", ["White"])[0]
+        })
+except Exception:
+    VEHICLE_CATALOG = [
+        {"maker": "Hyundai Motor India", "model": "i20 N-Line Turbo (Phantom Blue)", "fuel": "Petrol / BS-VI", "class": "Motor Car (LMV)", "cc": "998 cc", "color": "Starry Night Blue"},
+        {"maker": "Tata Motors Ltd", "model": "Nexon EV Max (Daytona Grey)", "fuel": "Electric (EV)", "class": "Motor Car (LMV)", "cc": "40.5 kWh", "color": "Daytona Grey"},
+        {"maker": "Maruti Suzuki India", "model": "Swift ZXi+ (Solid Fire Red)", "fuel": "Petrol / BS-VI", "class": "Motor Car (LMV)", "cc": "1197 cc", "color": "Solid Red"},
+        {"maker": "Mahindra & Mahindra", "model": "Thar 4x4 Hard Top (Napoli Black)", "fuel": "Diesel / BS-VI", "class": "Motor Car (LMV)", "cc": "2184 cc", "color": "Napoli Black"},
+        {"maker": "Toyota Kirloskar", "model": "Innova Crysta 2.4 VX (Super White)", "fuel": "Diesel / BS-VI", "class": "Motor Car (LMV)", "cc": "2393 cc", "color": "Super White"},
+        {"maker": "Honda Cars India", "model": "City ZX e:HEV Hybrid (Lunar Silver)", "fuel": "Hybrid / Petrol", "class": "Motor Car (LMV)", "cc": "1498 cc", "color": "Lunar Silver"},
+        {"maker": "Kia India", "model": "Seltos GT-Line (Gravity Grey)", "fuel": "Petrol / BS-VI", "class": "Motor Car (LMV)", "cc": "1482 cc", "color": "Gravity Grey"},
+        {"maker": "Volkswagen India", "model": "Virtus GT Plus 1.5 TSI (Wild Cherry Red)", "fuel": "Petrol / BS-VI", "class": "Motor Car (LMV)", "cc": "1498 cc", "color": "Wild Cherry Red"},
+        {"maker": "Royal Enfield", "model": "Hunter 350 Dapper Ash", "fuel": "Petrol", "class": "Two Wheeler (MCWG)", "cc": "349 cc", "color": "Dapper Ash"},
+        {"maker": "Tata Motors Ltd", "model": "Harrier Fearless Dark Edition", "fuel": "Diesel / BS-VI", "class": "Motor Car (LMV)", "cc": "1956 cc", "color": "Oberon Black"}
+    ]
 
 OWNER_NAMES_POOL = [
     ("K. R. Ramanathan", "R. Kalyanaraman", "Velachery Main Rd, Chennai"),

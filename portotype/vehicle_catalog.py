@@ -702,6 +702,552 @@ VEHICLE_CATALOG = [
         "colors": ["White", "Black", "Silver Grey", "Red", "Dark Blue"],
         "features": "Large Trapezoidal Grille with Chrome or Honeycomb Mesh, C-Shaped Fog Lamp Pockets, Chunky Muscular Stance",
         "typical_confidence": 0.93
+    },
+
+    # =========================================================================
+    # MARUTI SUZUKI (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "Maruti Suzuki",
+        "model": "WagonR",
+        "series": "Tallboy Urban Hatchback",
+        "body_style": "Hatchback / Compact Car",
+        "aspect_ratio": (0.85, 1.15),
+        "ground_clearance": "Medium (165 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_LETTER_S,
+        "colors": ["White", "Silver Grey", "Dark Blue", "Red", "Brown_Maroon"],
+        "features": "Tallboy Silhouette, High Upright Windshield, Swept-back Headlamps with Chrome Strip Grille Accent, Floating Roof Effect",
+        "typical_confidence": 0.94
+    },
+    {
+        "make": "Maruti Suzuki",
+        "model": "Ertiga / XL6",
+        "series": "7-Seater Family MUV",
+        "body_style": "Passenger Bus / Van",
+        "aspect_ratio": (1.15, 1.45),
+        "ground_clearance": "High (180 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_LETTER_S,
+        "colors": ["Silver Grey", "White", "Dark Blue", "Brown_Maroon", "Black"],
+        "features": "Chromed Winged Front Grille, Projector Headlamps with 3D LED Tail Lamps, Extended Multi-Row Window Greenhouse",
+        "typical_confidence": 0.93
+    },
+    {
+        "make": "Maruti Suzuki",
+        "model": "Fronx",
+        "series": "Coupe Crossover",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.10, 1.35),
+        "ground_clearance": "High (190 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_LETTER_S,
+        "colors": ["Red", "White", "Silver Grey", "Dark Blue", "Brown_Maroon"],
+        "features": "Split LED DRLs on Top with Bumper Headlamp Cluster, Wave Grille with Chrome Accent Bar, Sloping Aerodynamic Coupe Rear",
+        "typical_confidence": 0.94
+    },
+    {
+        "make": "Maruti Suzuki",
+        "model": "Jimny",
+        "series": "Compact 4x4 Off-Roader",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (0.88, 1.18),
+        "ground_clearance": "Very High (210 mm)",
+        "grille_type": GRILLE_VERTICAL_SLATS,
+        "emblem_shape": EMBLEM_LETTER_S,
+        "colors": ["Yellow", "Green", "White", "Silver Grey", "Dark Blue"],
+        "features": "Classic 5-Slot Vertical Grille with Chrome Rings, Round Retro Headlamps, Flat Upright Clamshell Bonnet, Tailgate Mounted Spare Wheel",
+        "typical_confidence": 0.95
+    },
+    {
+        "make": "Maruti Suzuki",
+        "model": "Alto K10 / Celerio",
+        "series": "Entry Compact Hatchback",
+        "body_style": "Hatchback / Compact Car",
+        "aspect_ratio": (0.90, 1.20),
+        "ground_clearance": "Medium (160 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_LETTER_S,
+        "colors": ["White", "Silver Grey", "Red", "Dark Blue", "Yellow"],
+        "features": "Large Hexagonal Honeycomb Lower Grille, Compact Teardrop Halogen Headlamps, Peppy Urban City Stance",
+        "typical_confidence": 0.92
+    },
+    {
+        "make": "Maruti Suzuki",
+        "model": "Ciaz",
+        "series": "Executive Mid-Size Sedan",
+        "body_style": "Sedan (Low Stance / Long Profile)",
+        "aspect_ratio": (1.42, 1.88),
+        "ground_clearance": "Medium (170 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_LETTER_S,
+        "colors": ["Silver Grey", "White", "Dark Blue", "Brown_Maroon", "Black"],
+        "features": "Multi-Wave Dark Chrome Grille with Chrome Garnishing, Sweptback LED Projector Headlamps with DRLs, Elegant Stretched Sedan Stance",
+        "typical_confidence": 0.93
+    },
+
+    # =========================================================================
+    # HYUNDAI (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "Hyundai",
+        "model": "Exter",
+        "series": "Micro Urban SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (0.95, 1.25),
+        "ground_clearance": "High (185 mm)",
+        "grille_type": GRILLE_PARAMETRIC_JEWEL,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["Green", "White", "Silver Grey", "Dark Blue", "Red"],
+        "features": "H-Shaped Signature LED DRLs, Parametric Black Front Grille, Chunky Skid Plates, Prominent EXTER Lettering on Bonnet",
+        "typical_confidence": 0.94
+    },
+    {
+        "make": "Hyundai",
+        "model": "Alcazar",
+        "series": "3-Row Premium Executive SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.10, 1.38),
+        "ground_clearance": "High (200 mm)",
+        "grille_type": GRILLE_PARAMETRIC_JEWEL,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["Brown_Maroon", "White", "Silver Grey", "Dark Blue", "Black"],
+        "features": "Dark Chrome Studded Cascading Grille, Trio Beam LED Headlamps with C-Shaped DRLs, Extended Rear Quarter Glass",
+        "typical_confidence": 0.93
+    },
+    {
+        "make": "Hyundai",
+        "model": "Tucson",
+        "series": "Flagship Luxury SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.12, 1.38),
+        "ground_clearance": "High (192 mm)",
+        "grille_type": GRILLE_PARAMETRIC_JEWEL,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["White", "Black", "Silver Grey", "Dark Blue", "Red"],
+        "features": "Hidden Parametric Jewel Mirror LED DRLs Seamlessly Integrated into Dark Chrome Grille, Angular Geometric Body Surfacing",
+        "typical_confidence": 0.95
+    },
+    {
+        "make": "Hyundai",
+        "model": "Grand i10 Nios / Aura",
+        "series": "Compact City Car",
+        "body_style": "Hatchback / Compact Car",
+        "aspect_ratio": (0.95, 1.25),
+        "ground_clearance": "Medium (165 mm)",
+        "grille_type": GRILLE_PARAMETRIC_JEWEL,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["White", "Silver Grey", "Red", "Dark Blue", "Green"],
+        "features": "Swept-Back Boomerang LED DRLs in Front Bumper, Wide Glossy Black Mesh Radiator Grille, Sporty Compact Silhouette",
+        "typical_confidence": 0.92
+    },
+
+    # =========================================================================
+    # TATA MOTORS (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "Tata Motors",
+        "model": "Tiago",
+        "series": "Dynamic City Hatchback",
+        "body_style": "Hatchback / Compact Car",
+        "aspect_ratio": (0.95, 1.25),
+        "ground_clearance": "Medium (170 mm)",
+        "grille_type": GRILLE_HUMANITY_LINE,
+        "emblem_shape": EMBLEM_CIRCLE,
+        "colors": ["White", "Red", "Dark Blue", "Silver Grey", "Yellow"],
+        "features": "Signature Humanity Line Chrome Bar with Y-Shaped Lower Air Dam Motifs, Angled 3D Headlamps, Compact Sturdy Hatchback Profile",
+        "typical_confidence": 0.93
+    },
+    {
+        "make": "Tata Motors",
+        "model": "Tigor",
+        "series": "Styleback Compact Sedan",
+        "body_style": "Sedan (Low Stance / Long Profile)",
+        "aspect_ratio": (1.35, 1.75),
+        "ground_clearance": "Medium (170 mm)",
+        "grille_type": GRILLE_HUMANITY_LINE,
+        "emblem_shape": EMBLEM_CIRCLE,
+        "colors": ["White", "Dark Blue", "Silver Grey", "Red", "Brown_Maroon"],
+        "features": "Tri-Arrow Chrome Accent Grille, Dual Chamber Projector Headlamps with LED DRLs, Coupe-Like Fastback Rear Boot Profile",
+        "typical_confidence": 0.92
+    },
+    {
+        "make": "Tata Motors",
+        "model": "Curvv / Curvv EV",
+        "series": "Coupe SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.10, 1.38),
+        "ground_clearance": "High (208 mm)",
+        "grille_type": GRILLE_HUMANITY_LINE,
+        "emblem_shape": EMBLEM_CIRCLE,
+        "colors": ["Red", "White", "Silver Grey", "Dark Blue", "Black"],
+        "features": "Full-Width Connected Horizon LED Light Bar, Sloping Aerodynamic Coupe Silhouette, Flush Door Handles, High Riding Stance",
+        "typical_confidence": 0.94
+    },
+    {
+        "make": "Tata Motors",
+        "model": "Nexon EV",
+        "series": "Electric Compact SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.05, 1.32),
+        "ground_clearance": "High (205 mm)",
+        "grille_type": GRILLE_HUMANITY_LINE,
+        "emblem_shape": EMBLEM_CIRCLE,
+        "colors": ["Teal Blue", "White", "Silver Grey", "Dark Blue", "Black"],
+        "features": "Closed Aerodynamic Upper Grille with Bi-Functional Full-Width LED DRL Light Bar, EV Blue Accents, Digital Welcome Animation",
+        "typical_confidence": 0.95
+    },
+
+    # =========================================================================
+    # MAHINDRA (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "Mahindra",
+        "model": "XUV 3XO / XUV300",
+        "series": "Turbocharged Compact SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.05, 1.30),
+        "ground_clearance": "High (201 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_TWIN_PEAKS,
+        "colors": ["Yellow", "Red", "White", "Black", "Dark Blue"],
+        "features": "C-Shaped LED DRLs Dropping to Lower Fog Housings, Piano Black Diamond Inset Grille with Twin Peaks Chrome Logo, Wide Stance",
+        "typical_confidence": 0.94
+    },
+    {
+        "make": "Mahindra",
+        "model": "Thar Roxx",
+        "series": "5-Door Luxury 4x4 Off-Roader",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (0.95, 1.25),
+        "ground_clearance": "Very High (226 mm)",
+        "grille_type": GRILLE_VERTICAL_SLATS,
+        "emblem_shape": EMBLEM_TWIN_PEAKS,
+        "colors": ["Black", "White", "Red", "Green", "Silver Grey"],
+        "features": "Body-Colored 6-Slot Upright Double-Decker Grille, C-Shaped LED DRLs Encircling Round Projector Headlamps, Panoramic Sunroof",
+        "typical_confidence": 0.95
+    },
+    {
+        "make": "Mahindra",
+        "model": "XUV400 EV",
+        "series": "All-Electric Performance Crossover",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.08, 1.32),
+        "ground_clearance": "High (200 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_TWIN_PEAKS,
+        "colors": ["Dark Blue", "White", "Silver Grey", "Black", "Copper Roof"],
+        "features": "Satin Copper Twin Peaks Logo and Copper Arrow Headlight Inset Accents, Closed Aero Front Grille, High Crossover Stance",
+        "typical_confidence": 0.93
+    },
+
+    # =========================================================================
+    # TOYOTA (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "Toyota",
+        "model": "Glanza",
+        "series": "Premium Urban Hatchback",
+        "body_style": "Hatchback / Compact Car",
+        "aspect_ratio": (0.98, 1.25),
+        "ground_clearance": "Medium (170 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["Red", "White", "Silver Grey", "Dark Blue", "Brown_Maroon"],
+        "features": "Toyota Camry-Inspired Sweeping Upper Grille Chrome Wing, L-Shaped LED DRLs, Aerodynamic Low Bumper Air Intake",
+        "typical_confidence": 0.93
+    },
+    {
+        "make": "Toyota",
+        "model": "Hilux",
+        "series": "Lifestyle 4x4 Off-Road Truck",
+        "body_style": "Heavy Commercial Truck / Lorry",
+        "aspect_ratio": (1.10, 1.40),
+        "ground_clearance": "Very High (216 mm)",
+        "grille_type": GRILLE_TRAPEZOID_MASSIVE,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["White", "Silver Grey", "Red", "Black", "Dark Blue"],
+        "features": "Massive Hexagonal 3D Chromed Truck Grille, Raised Rugged Bonnet Bulge, External Dual-Cab Cargo Bed with Sports Bar",
+        "typical_confidence": 0.96
+    },
+    {
+        "make": "Toyota",
+        "model": "Camry",
+        "series": "Executive Luxury Hybrid Sedan",
+        "body_style": "Sedan (Low Stance / Long Profile)",
+        "aspect_ratio": (1.45, 1.90),
+        "ground_clearance": "Medium (160 mm)",
+        "grille_type": GRILLE_TRAPEZOID_MASSIVE,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["White", "Black", "Silver Grey", "Dark Blue", "Red"],
+        "features": "Catamaran-Inspired Expansive Multi-Slat Lower Bumper Grille, Slim Bi-Beam LED Headlamps with Blue Hybrid Emblem Halo",
+        "typical_confidence": 0.94
+    },
+
+    # =========================================================================
+    # KIA (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "Kia",
+        "model": "EV6",
+        "series": "Electric Performance GT Crossover",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.15, 1.45),
+        "ground_clearance": "Medium-High (178 mm)",
+        "grille_type": GRILLE_TIGER_NOSE,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["Silver Grey", "White", "Black", "Red", "Dark Blue"],
+        "features": "Digital Tiger Face with Sequential Dynamic LED Light Patterns, Low Aerodynamic Hood, Full-Width Arching Rear LED Light Bar",
+        "typical_confidence": 0.95
+    },
+    {
+        "make": "Kia",
+        "model": "Carnival",
+        "series": "Luxury Grand Limousine MPV",
+        "body_style": "Passenger Bus / Van",
+        "aspect_ratio": (1.18, 1.48),
+        "ground_clearance": "Medium (180 mm)",
+        "grille_type": GRILLE_TIGER_NOSE,
+        "emblem_shape": EMBLEM_OVAL,
+        "colors": ["White", "Black", "Silver Grey", "Dark Blue"],
+        "features": "Architectural Island Chrome Tiger Nose Grille, Star Map Vertical LED Headlights with Integrated Daytime Accents, Power Sliding Doors",
+        "typical_confidence": 0.94
+    },
+
+    # =========================================================================
+    # HONDA (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "Honda",
+        "model": "Amaze",
+        "series": "Sub-4M Executive Compact Sedan",
+        "body_style": "Sedan (Low Stance / Long Profile)",
+        "aspect_ratio": (1.35, 1.75),
+        "ground_clearance": "Medium (170 mm)",
+        "grille_type": GRILLE_SOLID_WING,
+        "emblem_shape": EMBLEM_LETTER_H,
+        "colors": ["White", "Silver Grey", "Red", "Brown_Maroon", "Dark Blue"],
+        "features": "Solid Wing Front Face with Polished Chrome Header, Squared Aggressive Front Nose, Integrated C-Shaped LED Rear Tail Lights",
+        "typical_confidence": 0.93
+    },
+
+    # =========================================================================
+    # SKODA (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "Skoda",
+        "model": "Kodiaq",
+        "series": "Full-Size 7-Seater 4x4 Luxury SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.08, 1.35),
+        "ground_clearance": "High (192 mm)",
+        "grille_type": GRILLE_BUTTERFLY_RIBBED,
+        "emblem_shape": EMBLEM_SHIELD,
+        "colors": ["Dark Blue", "White", "Silver Grey", "Black", "Red"],
+        "features": "Upright Ribbed Butterfly Grille with Chromed Surround, Split Double-Decker LED Headlamps, Muscular 7-Seater European Stance",
+        "typical_confidence": 0.95
+    },
+    {
+        "make": "Skoda",
+        "model": "Superb",
+        "series": "Flagship Executive Luxury Sedan",
+        "body_style": "Sedan (Low Stance / Long Profile)",
+        "aspect_ratio": (1.45, 1.92),
+        "ground_clearance": "Medium (156 mm)",
+        "grille_type": GRILLE_BUTTERFLY_RIBBED,
+        "emblem_shape": EMBLEM_SHIELD,
+        "colors": ["Black", "White", "Silver Grey", "Dark Blue", "Brown_Maroon"],
+        "features": "Sculpted Octagonal Butterfly Grille, Matrix LED Headlamps with Crystalline Elements, Stretched Long-Wheelbase Executive Silhouette",
+        "typical_confidence": 0.95
+    },
+
+    # =========================================================================
+    # MG MOTOR (Additional Popular Models)
+    # =========================================================================
+    {
+        "make": "MG Motor",
+        "model": "Gloster",
+        "series": "Full-Size 4x4 Luxury Off-Road SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.05, 1.30),
+        "ground_clearance": "Very High (210 mm)",
+        "grille_type": GRILLE_CHROME_LOUVER,
+        "emblem_shape": EMBLEM_OCTAGON,
+        "colors": ["Black", "White", "Silver Grey", "Brown_Maroon"],
+        "features": "Massive Horizontal Triple Chrome Slat Grille with Large MG Octagon Crest, Tall Boxy Stance, Quad Exhaust Tips",
+        "typical_confidence": 0.94
+    },
+    {
+        "make": "MG Motor",
+        "model": "Comet EV",
+        "series": "Ultra-Compact Smart Urban Electric Car",
+        "body_style": "Hatchback / Compact Car",
+        "aspect_ratio": (0.80, 1.10),
+        "ground_clearance": "Medium (165 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_OCTAGON,
+        "colors": ["White", "Silver Grey", "Green", "Black"],
+        "features": "Ultra-Compact 2-Door Urban Pod Stance, Full-Width LED Light Bar Extending Across Side Mirrors, Vertical Rear Passenger Window",
+        "typical_confidence": 0.96
+    },
+
+    # =========================================================================
+    # RENAULT (France)
+    # =========================================================================
+    {
+        "make": "Renault",
+        "model": "Kwid",
+        "series": "Urban Entry Hatchback",
+        "body_style": "Hatchback / Compact Car",
+        "aspect_ratio": (0.92, 1.22),
+        "ground_clearance": "High (184 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_SHIELD,
+        "colors": ["White", "Silver Grey", "Red", "Dark Blue", "Yellow"],
+        "features": "Dual-Tone Chrome Finished Grille with Central Renault Diamond, Split Headlamp with Slim LED Eyebrows, SUV-Inspired Cladding",
+        "typical_confidence": 0.93
+    },
+    {
+        "make": "Renault",
+        "model": "Triber",
+        "series": "Modular 7-Seater Space MUV",
+        "body_style": "Passenger Bus / Van",
+        "aspect_ratio": (1.10, 1.40),
+        "ground_clearance": "High (182 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_SHIELD,
+        "colors": ["Yellow", "White", "Silver Grey", "Dark Blue", "Brown_Maroon"],
+        "features": "Triple Edge Chrome Front Grille, Eagle Eye Projector Headlamps with Horizontal LED DRLs, Stepped Roofline with Rails",
+        "typical_confidence": 0.92
+    },
+    {
+        "make": "Renault",
+        "model": "Kiger",
+        "series": "Turbocharged Compact Crossover",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.05, 1.30),
+        "ground_clearance": "Very High (205 mm)",
+        "grille_type": GRILLE_HONEYCOMB_HEX,
+        "emblem_shape": EMBLEM_SHIELD,
+        "colors": ["Red", "Silver Grey", "White", "Dark Blue", "Black"],
+        "features": "3D Wing-Shaped Chrome Grille Merging into LED DRLs, Tri-Octa Pure Vision Pure LED Bumper Headlights, Aerodynamic Roof Spoiler",
+        "typical_confidence": 0.93
+    },
+
+    # =========================================================================
+    # NISSAN (Japan)
+    # =========================================================================
+    {
+        "make": "Nissan",
+        "model": "Magnite",
+        "series": "Japanese Urban Crossover",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.05, 1.30),
+        "ground_clearance": "Very High (205 mm)",
+        "grille_type": GRILLE_SINGLEFRAME_HEX,
+        "emblem_shape": EMBLEM_CIRCLE,
+        "colors": ["Red", "White", "Silver Grey", "Dark Blue", "Black"],
+        "features": "Large Octagonal Grille with Thick Chrome Border Accents, Distinctive L-Shaped LED DRL Boomerangs in Lower Bumper",
+        "typical_confidence": 0.94
+    },
+    {
+        "make": "Nissan",
+        "model": "X-Trail",
+        "series": "Mid-Size Japanese Family SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.08, 1.35),
+        "ground_clearance": "High (210 mm)",
+        "grille_type": GRILLE_CHROME_LOUVER,
+        "emblem_shape": EMBLEM_CIRCLE,
+        "colors": ["Silver Grey", "White", "Black", "Dark Blue"],
+        "features": "Signature V-Motion Chrome Grille, Split LED DRLs and Headlamp Modules, Floating Roof with Darkened C-Pillar Accent",
+        "typical_confidence": 0.93
+    },
+
+    # =========================================================================
+    # JEEP (USA / Stellantis)
+    # =========================================================================
+    {
+        "make": "Jeep",
+        "model": "Compass",
+        "series": "Premium 4x4 Compact SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.05, 1.32),
+        "ground_clearance": "High (178 mm)",
+        "grille_type": GRILLE_VERTICAL_SLATS,
+        "emblem_shape": EMBLEM_RECTANGLE,
+        "colors": ["White", "Black", "Red", "Silver Grey", "Dark Blue", "Green"],
+        "features": "Iconic Seven-Slot Gloss Black Grille with Chrome Rings, Sleek Bi-Xenon / LED Projectors, Trapezoidal Wheel Arches",
+        "typical_confidence": 0.96
+    },
+    {
+        "make": "Jeep",
+        "model": "Meridian",
+        "series": "3-Row 7-Seater Adventure Luxury SUV",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (1.10, 1.38),
+        "ground_clearance": "High (203 mm)",
+        "grille_type": GRILLE_VERTICAL_SLATS,
+        "emblem_shape": EMBLEM_RECTANGLE,
+        "colors": ["Green", "Brown_Maroon", "White", "Black", "Silver Grey"],
+        "features": "Stretched 7-Slot Grille with Integrated Chrome Appliques, Slim Horizontal LED Headlamps, Extended Rear Overhang",
+        "typical_confidence": 0.94
+    },
+    {
+        "make": "Jeep",
+        "model": "Wrangler Rubicon",
+        "series": "Trail-Rated Hardcore 4x4 Off-Roader",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (0.90, 1.20),
+        "ground_clearance": "Very High (252 mm)",
+        "grille_type": GRILLE_VERTICAL_SLATS,
+        "emblem_shape": EMBLEM_RECTANGLE,
+        "colors": ["Red", "Green", "White", "Black", "Yellow", "Silver Grey"],
+        "features": "Keystone Seven-Slot Upright Front Grille, Round LED Headlamps, Exposed Torx Hinges, Removable Roof Panels",
+        "typical_confidence": 0.97
+    },
+
+    # =========================================================================
+    # BMW & MERCEDES-BENZ (Additional Flagship Models)
+    # =========================================================================
+    {
+        "make": "BMW",
+        "model": "7 Series / i7",
+        "series": "Flagship Luxury Executive Sedan",
+        "body_style": "Sedan (Low Stance / Long Profile)",
+        "aspect_ratio": (1.45, 1.95),
+        "ground_clearance": "Medium (150 mm)",
+        "grille_type": GRILLE_KIDNEY_DUAL,
+        "emblem_shape": EMBLEM_CIRCLE,
+        "colors": ["Black", "Silver Grey", "White", "Dark Blue", "Brown_Maroon"],
+        "features": "Massive Illuminated Iconic Glow Kidney Grille, Ultra-Slim Swarovski Crystal Split Headlights, Monolithic Stance",
+        "typical_confidence": 0.96
+    },
+    {
+        "make": "Mercedes-Benz",
+        "model": "S-Class",
+        "series": "The World's Preeminent Luxury Sedan",
+        "body_style": "Sedan (Low Stance / Long Profile)",
+        "aspect_ratio": (1.45, 1.95),
+        "ground_clearance": "Medium (150 mm)",
+        "grille_type": GRILLE_PANAMERICANA_STAR,
+        "emblem_shape": EMBLEM_STAR_3,
+        "colors": ["Black", "Silver Grey", "White", "Dark Blue"],
+        "features": "Upright Three-Louver Chrome Grille with Classic Bonnet Star Crest, Digital Light Headlamps, Flush Door Handles",
+        "typical_confidence": 0.96
+    },
+    {
+        "make": "Mercedes-Benz",
+        "model": "G-Class / G-Wagon",
+        "series": "Legendary Luxury Boxy Off-Roader",
+        "body_style": "SUV / Compact Crossover",
+        "aspect_ratio": (0.88, 1.18),
+        "ground_clearance": "Very High (241 mm)",
+        "grille_type": GRILLE_PANAMERICANA_STAR,
+        "emblem_shape": EMBLEM_STAR_3,
+        "colors": ["Black", "White", "Silver Grey", "Green", "Yellow"],
+        "features": "Unmistakable Flat Angular Boxy Silhouette, Round Multibeam LED Headlamps, Top Bonnet Wing-Mounted Turn Signals",
+        "typical_confidence": 0.97
     }
 ]
 

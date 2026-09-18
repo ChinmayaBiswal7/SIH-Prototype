@@ -609,7 +609,9 @@ def upload_and_process_anpr():
         # Unplated Vehicle Profiling & Re-ID for Plate-Less / Covered Plate Vehicles
         ghost_info = None
         if p_viol == "MISSING_OR_COVERED_PLATE" or "NO PLATE" in plate or "UNREADABLE" in plate:
-            v_prof = p.get("vehicle_profile") or vehicle_profiler.extract_vehicle_profile(None, vehicle_type=p.get("vehicle_type", "Car"))
+            v_prof = p.get("vehicle_profile") or vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=p.get("vehicle_type", "Car"))
+            if v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
+                p["vehicle_type"] = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
             ghost_info = vehicle_reid.match_or_create_ghost(
                 v_prof,
                 camera_id="CAM_LIVE",
@@ -619,6 +621,15 @@ def upload_and_process_anpr():
             )
             plate = f"{ghost_info['ghost_id']} (NO PLATE)"
             p["plate"] = plate
+        else:
+            if not p.get("vehicle_profile"):
+                try:
+                    p_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=p.get("vehicle_type", "Car"))
+                    p["vehicle_profile"] = p_prof
+                    if (not p.get("vehicle_type") or p["vehicle_type"].upper() in ["CAR", "MOTOR CAR", "AUTOMOBILE"]) and p_prof and p_prof.get("estimated_make"):
+                        p["vehicle_type"] = f"{p_prof['estimated_make']} {p_prof['estimated_model']}"
+                except Exception:
+                    pass
 
         # Safe filename without illegal Windows characters or slashes
         safe_plate = re.sub(r'[^\w\-]', '_', plate).strip('_')

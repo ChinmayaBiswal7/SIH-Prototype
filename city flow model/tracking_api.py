@@ -581,6 +581,15 @@ def register_tracking_routes(app):
                             p["vehicle_type"] = f"{v_rto['vehicle_maker']} {v_rto['vehicle_model']}"
                     except Exception:
                         pass
+                    if not p.get("vehicle_profile"):
+                        try:
+                            import vehicle_profiler
+                            v_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=p.get("vehicle_type", "Car"))
+                            p["vehicle_profile"] = v_prof
+                            if (not p.get("vehicle_type") or p["vehicle_type"].upper() in ["CAR", "MOTOR CAR", "AUTOMOBILE"]) and v_prof and v_prof.get("estimated_make"):
+                                p["vehicle_type"] = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
+                        except Exception:
+                            pass
 
         elif filename_plate_match:
             plate_cand = filename_plate_match.group(0).upper()
@@ -590,16 +599,28 @@ def register_tracking_routes(app):
                 v_rto = rto.lookup_rto_vehicle(plate_cand)
             except Exception:
                 pass
+            v_prof = None
+            try:
+                import vehicle_profiler
+                v_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=v_rto.get("vehicle_model", "Car"))
+            except Exception:
+                pass
+            v_type_label = f"{v_rto.get('vehicle_maker', '')} {v_rto.get('vehicle_model', '')}".strip()
+            if not v_type_label and v_prof and v_prof.get("estimated_make"):
+                v_type_label = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
+            if not v_type_label:
+                v_type_label = "Car"
             plates_found = [{
                 "plate": plate_cand,
                 "confidence": round(random.uniform(0.94, 0.98), 3),
-                "vehicle_type": f"{v_rto.get('vehicle_maker', 'Hyundai')} {v_rto.get('vehicle_model', 'Car')}" if v_rto else "Car",
+                "vehicle_type": v_type_label,
                 "plate_color": "WHITE",
                 "category": "Private Vehicle",
                 "violation": "NONE",
                 "environmental_condition": "NORMAL",
                 "quality_score": 0.95,
                 "vahan_details": v_rto,
+                "vehicle_profile": v_prof,
                 "voting_details": {
                     "frames_analyzed": 4,
                     "consensus_ratio": 0.98,
@@ -630,21 +651,26 @@ def register_tracking_routes(app):
                 except Exception as pe:
                     print(f"[Tracking API] Profiler note: {pe}")
 
-                if not v_prof or v_prof.get("estimated_make") in ["Unknown Maker", "Unidentified Maker", "Passenger Vehicle"]:
+                if not v_prof:
                     v_prof = {
                         "vehicle_type": "Car",
-                        "body_subtype": "SUV / Compact Crossover",
+                        "body_subtype": "SUV / Sedan / Hatchback",
                         "dominant_color": "White",
-                        "secondary_color": "Solid White with Black Honeycomb Air Dam",
+                        "secondary_color": "Monotone Finish",
                         "color_hex": "#F8FAFC",
-                        "aspect_ratio": 1.45,
-                        "profile_summary": "Volkswagen Taigun in White",
-                        "estimated_make": "Volkswagen",
-                        "estimated_model": "Taigun (Compact SUV Crossover)",
-                        "make_confidence": 0.948,
-                        "distinguishing_features": "Circular Center Grille Emblem, Horizontal Chrome Louvers, Integrated Roof Rails",
-                        "runner_up": {"make": "Skoda", "model": "Kushaq", "confidence": 0.82}
+                        "aspect_ratio": 1.35,
+                        "profile_summary": "Unidentified Vehicle",
+                        "estimated_make": "Unidentified Make",
+                        "estimated_model": "Suspect Vehicle",
+                        "make_confidence": 0.70,
+                        "distinguishing_features": "Standard Automotive Profile",
+                        "runner_up": None
                     }
+
+                # Dynamic unplated label from the 84-vehicle classifier
+                veh_make = v_prof.get("estimated_make") or ""
+                veh_model = v_prof.get("estimated_model") or v_prof.get("body_subtype") or "Vehicle"
+                veh_label = f"{veh_make} {veh_model}".strip() if veh_make and "Unidentified" not in veh_make else v_prof.get("body_subtype", "Car")
 
                 # Fresh unplated profile generated on the fly
                 dom_col = (v_prof.get("dominant_color", "UNK") if v_prof else "UNK").split()[0].upper()[:3]
@@ -662,7 +688,7 @@ def register_tracking_routes(app):
                 plates_found = [{
                     "plate": plate,
                     "confidence": 0.0,
-                    "vehicle_type": v_prof.get("body_subtype", "SUV / Compact Crossover"),
+                    "vehicle_type": veh_label,
                     "plate_color": "GREY",
                     "category": "Violation / Missing Plate",
                     "violation": "MISSING_OR_COVERED_PLATE",
@@ -859,10 +885,20 @@ def register_tracking_routes(app):
                                         v_rto = rto.lookup_rto_vehicle(v_clean)
                                     except Exception:
                                         pass
+                                    v_prof = None
+                                    if ann_frame is not None:
+                                        try:
+                                            import vehicle_profiler
+                                            v_prof = vehicle_profiler.extract_vehicle_profile(ann_frame, vehicle_type=v_type)
+                                        except Exception:
+                                            pass
+                                    type_str = f"{v_rto.get('vehicle_maker', '')} {v_rto.get('vehicle_model', '')}".strip()
+                                    if not type_str and v_prof and v_prof.get("estimated_make"):
+                                        type_str = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
                                     rec = {
                                         "plate": v_clean,
                                         "confidence": v_conf,
-                                        "vehicle_type": f"{v_rto.get('vehicle_maker', '')} {v_rto.get('vehicle_model', '')}".strip() or v_type,
+                                        "vehicle_type": type_str or v_type,
                                         "camera_id": "CAM_CCTV_STREAM",
                                         "image_path": snap_url,
                                         "timestamp": timestamp,
@@ -871,15 +907,28 @@ def register_tracking_routes(app):
                                         "plate_color": "WHITE",
                                         "violation": "NONE",
                                         "vahan_details": v_rto,
+                                        "vehicle_profile": v_prof,
                                         "voting_details": {"frames_analyzed": 12, "confidence_boost": "+11.5% (GPU Video Consensus)"}
                                     }
                                 else:
                                     rand_id = random.randint(1000, 9999)
                                     ghost_id = v_plate or f"UNPLATED-CCTV-{rand_id}"
+                                    v_prof = None
+                                    if ann_frame is not None:
+                                        try:
+                                            import vehicle_profiler
+                                            v_prof = vehicle_profiler.extract_vehicle_profile(ann_frame, vehicle_type="Car")
+                                        except Exception:
+                                            pass
+                                    u_type = v_type
+                                    if v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
+                                        u_type = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
+                                    elif v_prof and v_prof.get("body_subtype"):
+                                        u_type = v_prof.get("body_subtype")
                                     rec = {
                                         "plate": f"{ghost_id} (NO PLATE)" if "NO PLATE" not in ghost_id else ghost_id,
                                         "confidence": 0.0,
-                                        "vehicle_type": v_type,
+                                        "vehicle_type": u_type,
                                         "camera_id": "CAM_CCTV_STREAM",
                                         "image_path": snap_url,
                                         "timestamp": timestamp,
@@ -887,7 +936,8 @@ def register_tracking_routes(app):
                                         "category": "Violation / Missing Plate",
                                         "plate_color": "GREY",
                                         "violation": "MISSING_OR_COVERED_PLATE",
-                                        "ghost_info": {"ghost_id": ghost_id, "is_new": True},
+                                        "ghost_info": {"ghost_id": ghost_id, "is_new": True, "profile": v_prof},
+                                        "vehicle_profile": v_prof,
                                         "voting_details": {"frames_analyzed": 12, "confidence_boost": "+14.0% (Video Forensic Re-ID)"}
                                     }
 
@@ -977,10 +1027,19 @@ def register_tracking_routes(app):
                                 except Exception:
                                     cv2.imwrite(snap_path, frame)
                                 snap_url = f"/api/snapshot/{snap_name}"
+                                v_prof = None
+                                try:
+                                    import vehicle_profiler
+                                    v_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=pl.get("vehicle_type", "Car"))
+                                except Exception:
+                                    pass
+                                v_type_str = pl.get("vehicle_type", "Car")
+                                if (not v_type_str or v_type_str.upper() in ["CAR", "MOTOR CAR", "AUTOMOBILE"]) and v_prof and v_prof.get("estimated_make"):
+                                    v_type_str = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
                                 rec = {
                                     "plate": p_str,
                                     "confidence": pl.get("confidence", 0.96),
-                                    "vehicle_type": pl.get("vehicle_type", "Car"),
+                                    "vehicle_type": v_type_str,
                                     "camera_id": "CAM_CCTV_STREAM",
                                     "image_path": snap_url,
                                     "timestamp": timestamp,
@@ -988,6 +1047,7 @@ def register_tracking_routes(app):
                                     "category": pl.get("category", "Private Vehicle"),
                                     "plate_color": pl.get("plate_color", "WHITE"),
                                     "violation": pl.get("violation", "NONE"),
+                                    "vehicle_profile": v_prof,
                                     "voting_details": {"frames_analyzed": 5, "confidence_boost": "+10.2% (Video Keyframe OCR)"}
                                 }
                                 detected_records.append(rec)
@@ -1020,10 +1080,16 @@ def register_tracking_routes(app):
                         snap_path = os.path.join(SNAPSHOT_DIR, snap_name)
                         snap_url = f"/api/snapshot/{snap_name}"
 
+                        v_type_str = "Car"
+                        if v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
+                            v_type_str = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
+                        elif v_prof and v_prof.get("body_subtype"):
+                            v_type_str = v_prof.get("body_subtype")
+
                         rec = {
                             "plate": f"{ghost_id} (NO PLATE)",
                             "confidence": 0.0,
-                            "vehicle_type": v_prof.get("body_subtype", "SUV / Compact Crossover") if v_prof else "Car",
+                            "vehicle_type": v_type_str,
                             "camera_id": "CAM_CCTV_STREAM",
                             "image_path": snap_url,
                             "timestamp": timestamp,

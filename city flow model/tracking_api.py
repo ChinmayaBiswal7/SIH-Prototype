@@ -41,6 +41,17 @@ if not os.path.exists(STATIC_TRACKING_DIR):
 
 SNAPSHOT_DIR = os.path.join(PORTOTYPE_DIR, "data", "snapshots")
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+DEMO_SNAPSHOT_DIR = os.path.join(PORTOTYPE_DIR, "demo_snapshots")
+if os.path.exists(DEMO_SNAPSHOT_DIR):
+    import shutil
+    for s_file in os.listdir(DEMO_SNAPSHOT_DIR):
+        src_p = os.path.join(DEMO_SNAPSHOT_DIR, s_file)
+        dst_p = os.path.join(SNAPSHOT_DIR, s_file)
+        if not os.path.exists(dst_p) and os.path.isfile(src_p):
+            try:
+                shutil.copy(src_p, dst_p)
+            except Exception:
+                pass
 
 _sim_running = False
 _sim_thread = None
@@ -509,10 +520,11 @@ def register_tracking_routes(app):
                     p_txt = p.get("plate", "")
                     is_unplated = "NO PLATE" in p_txt or p.get("violation") == "MISSING_OR_COVERED_PLATE"
                     box_col = (50, 50, 220) if is_unplated else (34, 197, 94)
-                    if plate_bbox and not is_unplated:
-                        bx, by, bw, bh = plate_bbox
-                        cv2.rectangle(annotated, (bx, by), (bx + bw, by + bh), box_col, 2)
-                        cv2.putText(annotated, p_txt, (bx, max(20, by - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_col, 2)
+                    p_box = p.get("plate_bbox") or p.get("bbox")
+                    if p_box and not is_unplated:
+                        bx1, by1, bx2, by2 = p_box
+                        cv2.rectangle(annotated, (bx1, by1), (bx2, by2), box_col, 2)
+                        cv2.putText(annotated, p_txt, (bx1, max(20, by1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_col, 2)
                     elif is_unplated:
                         h_f, w_f = annotated.shape[:2]
                         cv2.rectangle(annotated, (15, 15), (w_f - 15, h_f - 15), (50, 50, 230), 2)
@@ -940,8 +952,22 @@ def register_tracking_routes(app):
     # -------------------------------------------------------------------
     @app.route("/api/snapshot/<path:filename>")
     def api_snapshot(filename):
-        if os.path.exists(os.path.join(SNAPSHOT_DIR, filename)):
+        # 1. Primary: user uploaded or live captured snapshot in SNAPSHOT_DIR
+        target = os.path.join(SNAPSHOT_DIR, filename)
+        if os.path.exists(target):
             return send_from_directory(SNAPSHOT_DIR, filename)
+
+        # 2. Demo vehicle snapshots directory (persisted in git repo)
+        demo_dir = os.path.join(PORTOTYPE_DIR, "demo_snapshots")
+        demo_target = os.path.join(demo_dir, filename)
+        if os.path.exists(demo_target):
+            return send_from_directory(demo_dir, filename)
+
+        # 3. Fallback to real test_cctv.jpg car photo
+        cctv_fallback = os.path.join(demo_dir, "test_cctv.jpg")
+        if os.path.exists(cctv_fallback):
+            return send_from_directory(demo_dir, "test_cctv.jpg")
+
         svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
             <rect width="320" height="180" fill="#0f172a"/>
             <rect x="10" y="10" width="300" height="160" fill="#1e293b" rx="8"/>

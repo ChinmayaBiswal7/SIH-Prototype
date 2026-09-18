@@ -236,10 +236,10 @@ def init_db():
     existing_ghosts = c.execute("SELECT COUNT(*) FROM ghost_profiles").fetchone()[0]
     if existing_ghosts == 0:
         demo_ghosts = [
-            ("GHOST_01", "Car", "Sedan", "Silver", "Tinted Glass", "#94A3B8", 1.6, "[]", "2026-09-17T18:10:00", "2026-09-17T19:25:00", "CAM_PATIA", "CAM_JAYADEV", 3, "/api/snapshot/test_cctv.jpg", "ACTIVE_TRACKING", "Hyundai", "Verna", 0.91, "Missing front plate & dark side tint", "Honda City"),
-            ("GHOST_02", "SUV", "SUV", "Black", "Black Grille", "#1E293B", 1.4, "[]", "2026-09-17T17:45:00", "2026-09-17T19:10:00", "CAM_KHANDG", "CAM_FIRE_STN", 2, "/api/snapshot/test_cctv.jpg", "ACTIVE_TRACKING", "Mahindra", "Scorpio-N", 0.88, "Completely removed front/rear plates", "Tata Harrier"),
-            ("GHOST_03", "Car", "Hatchback", "White", "Mud Splatter", "#F8FAFC", 1.5, "[]", "2026-09-17T18:30:00", "2026-09-17T19:35:00", "CAM_RASUL", "CAM_MAST", 3, "/api/snapshot/test_cctv.jpg", "ACTIVE_TRACKING", "Maruti", "Swift", 0.86, "Deliberately mud-covered number plate", "Hyundai i20"),
-            ("GHOST_04", "Motorbike", "Sports", "Red", "Black Decals", "#EF4444", 1.2, "[]", "2026-09-17T18:50:00", "2026-09-17T19:40:00", "CAM_KIIT", "CAM_INFOCITY", 2, "/api/snapshot/test_cctv.jpg", "ACTIVE_TRACKING", "Yamaha", "R15", 0.94, "Folded tail plate bracket", "KTM RC"),
+            ("GHOST_01", "Car", "Sedan", "Silver", "Tinted Glass", "#94A3B8", 1.6, "[]", "2026-09-17T18:10:00", "2026-09-17T19:25:00", "CAM_PATIA", "CAM_JAYADEV", 3, "/api/snapshot/ghost_01_sedan.jpg", "ACTIVE_TRACKING", "Hyundai", "Verna", 0.91, "Missing front plate & dark side tint", "Honda City"),
+            ("GHOST_02", "SUV", "SUV", "Black", "Black Grille", "#1E293B", 1.4, "[]", "2026-09-17T17:45:00", "2026-09-17T19:10:00", "CAM_KHANDG", "CAM_FIRE_STN", 2, "/api/snapshot/ghost_02_suv.jpg", "ACTIVE_TRACKING", "Mahindra", "Scorpio-N", 0.88, "Completely removed front/rear plates", "Tata Harrier"),
+            ("GHOST_03", "Car", "Hatchback", "White", "Mud Splatter", "#F8FAFC", 1.5, "[]", "2026-09-17T18:30:00", "2026-09-17T19:35:00", "CAM_RASUL", "CAM_MAST", 3, "/api/snapshot/ghost_03_hatch.jpg", "ACTIVE_TRACKING", "Maruti", "Swift", 0.86, "Deliberately mud-covered number plate", "Hyundai i20"),
+            ("GHOST_04", "Motorbike", "Sports", "Red", "Black Decals", "#EF4444", 1.2, "[]", "2026-09-17T18:50:00", "2026-09-17T19:40:00", "CAM_KIIT", "CAM_INFOCITY", 2, "/api/snapshot/ghost_04_bike.jpg", "ACTIVE_TRACKING", "Yamaha", "R15", 0.94, "Folded tail plate bracket", "KTM RC"),
         ]
         for g in demo_ghosts:
             c.execute("""

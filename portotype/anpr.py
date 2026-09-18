@@ -308,6 +308,14 @@ def post_process(raw: str) -> str:
     if len(raw_clean) < 8 or len(raw_clean) > 10:
         return None
 
+    # Accept Bharat Series
+    if re.match(r"^\d{2}BH\d{4}[A-Z]{1,2}$", raw_clean):
+        return raw_clean
+
+    # Accept Temporary Registration plate
+    if re.match(r"^T\d{4}[A-Z]{2}\d{3,5}[A-Z]?$", raw_clean):
+        return raw_clean
+
     corrected = fix_positional_characters(raw_clean)
 
     # Accept if it matches Indian plate pattern and has valid state
@@ -316,7 +324,7 @@ def post_process(raw: str) -> str:
 
     # Try regex extraction on corrected
     matches = _INDIAN_EXTRACTOR.findall(corrected)
-    valid = [m for m in matches if m[:2] in INDIAN_STATES and 8 <= len(m) <= 10]
+    valid = [m for m in matches if (m[:2] in INDIAN_STATES or m.startswith("T") or "BH" in m) and 8 <= len(m) <= 13]
     if valid:
         return valid[0]
 
@@ -326,7 +334,7 @@ def post_process(raw: str) -> str:
 # Regex patterns (used by extraction functions below)
 _PLATE_PATTERN = re.compile(r"^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$")
 _STRICT_INDIAN_PATTERN = re.compile(r"^([A-Z]{2})([0-9]{1,2})([A-Z]{1,3})([0-9]{4})$")
-_INDIAN_EXTRACTOR = re.compile(r"([A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4})")
+_INDIAN_EXTRACTOR = re.compile(r"([A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}|T[0-9]{4}[A-Z]{2}[0-9]{3,5}[A-Z]?|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})")
 
 
 def extract_all_indian_plates_from_string(raw_text: str) -> list:
@@ -340,9 +348,9 @@ def extract_all_indian_plates_from_string(raw_text: str) -> list:
     clean = strip_hsrp_ind_prefix(clean)
 
     # 1. Primary: direct regex extraction after character correction
-    corrected = fix_positional_characters(clean) if 8 <= len(clean) <= 10 else clean
+    corrected = fix_positional_characters(clean) if (8 <= len(clean) <= 10 and not clean.startswith('T')) else clean
     matches = _INDIAN_EXTRACTOR.findall(corrected)
-    found_plates = [m for m in matches if m[:2] in INDIAN_STATES and 8 <= len(m) <= 10]
+    found_plates = [m for m in matches if (m[:2] in INDIAN_STATES or m.startswith("T") or "BH" in m) and 8 <= len(m) <= 13]
     if found_plates:
         return list(dict.fromkeys(found_plates))
 
@@ -403,9 +411,13 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
 
     # Resize large crops to max height 140px preserving aspect ratio for sharp OCR inference
     gh, gw = gray.shape[:2]
-    if gh > 140:
+    aspect = gw / max(1, gh)
+    if gh > 140 and (aspect >= 1.6 or gw <= 500):
         scale = 140.0 / gh
         gray = cv2.resize(gray, (int(gw * scale), 140), interpolation=cv2.INTER_AREA)
+    elif gw > 1280:
+        scale = 1280.0 / gw
+        gray = cv2.resize(gray, (1280, int(gh * scale)), interpolation=cv2.INTER_AREA)
 
     # Apply CLAHE to dramatically boost character contrast against plate background
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -717,9 +729,33 @@ def scan_frame_for_plates(frame):
         except Exception:
             raw_results = None
         if raw_results:
-            # Only keep tokens that look like plate tokens (short, high conf)
+            scale_x = w / float(proc.shape[1])
+            scale_y = h / float(proc.shape[0])
+
+            # 1. Direct single-token plate match (e.g. TN87C5106 or T0322UP42298 in one token)
+            for box, txt, c in raw_results:
+                clean_t = re.sub(r'[^A-Za-z0-9]', '', txt.upper())
+                p = extract_indian_plate_from_string(clean_t) or post_process(clean_t)
+                if p and p not in found_plates_set:
+                    found_plates_set.add(p)
+                    res3 = _sequence_fusion.add_frame_observation(
+                        abs(hash(p[:4])) % 10000, frame, p, float(c), telemetry)
+                    p_color, p_cat = classify_plate_color_and_category(frame)
+                    bx1 = max(0, int(min(pt[0] for pt in box) * scale_x))
+                    by1 = max(0, int(min(pt[1] for pt in box) * scale_y))
+                    bx2 = min(w, int(max(pt[0] for pt in box) * scale_x))
+                    by2 = min(h, int(max(pt[1] for pt in box) * scale_y))
+                    detections.append({
+                        "plate": res3[0], "confidence": res3[1],
+                        "vehicle_type": "Car", "bbox": (0, 0, w, h),
+                        "plate_bbox": (bx1, by1, bx2, by2), "voting_details": res3[2], "telemetry": telemetry,
+                        "plate_color": p_color, "category": p_cat, "violation": "NONE"
+                    })
+                    return detections
+
+            # 2. Multi-token combination fallback (split plate e.g. "TN 87" + "C 5106")
             plate_tokens = [(box, txt, c) for box, txt, c in raw_results
-                            if c >= 0.40 and 2 <= len(txt.replace(' ', '')) <= 6]
+                            if c >= 0.35 and 2 <= len(txt.replace(' ', '')) <= 8]
             if len(plate_tokens) >= 2:
                 sorted_res = sorted(plate_tokens, key=lambda x: x[0][0][0])
                 combined = " ".join([t for _, t, _ in sorted_res])
@@ -730,10 +766,15 @@ def scan_frame_for_plates(frame):
                     res3 = _sequence_fusion.add_frame_observation(
                         abs(hash(full_plate[:4])) % 10000, frame, full_plate, avg_conf, telemetry)
                     p_color, p_cat = classify_plate_color_and_category(frame)
+                    all_pts = [pt for b, _, _ in sorted_res for pt in b]
+                    bx1 = max(0, int(min(pt[0] for pt in all_pts) * scale_x))
+                    by1 = max(0, int(min(pt[1] for pt in all_pts) * scale_y))
+                    bx2 = min(w, int(max(pt[0] for pt in all_pts) * scale_x))
+                    by2 = min(h, int(max(pt[1] for pt in all_pts) * scale_y))
                     detections.append({
                         "plate": res3[0], "confidence": res3[1],
                         "vehicle_type": "Car", "bbox": (0, 0, w, h),
-                        "plate_bbox": (0, 0, w, h), "voting_details": res3[2], "telemetry": telemetry,
+                        "plate_bbox": (bx1, by1, bx2, by2), "voting_details": res3[2], "telemetry": telemetry,
                         "plate_color": p_color, "category": p_cat, "violation": "NONE"
                     })
 

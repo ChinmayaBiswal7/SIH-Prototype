@@ -1011,6 +1011,13 @@ def poll_video_job(job_id):
 
 @app.route("/api/snapshot/<path:filename>")
 def get_snapshot(filename):
+    if os.path.exists(os.path.join(SNAPSHOT_DIR, filename)):
+        return send_from_directory(SNAPSHOT_DIR, filename)
+    demo_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_snapshots")
+    if os.path.exists(os.path.join(demo_dir, filename)):
+        return send_from_directory(demo_dir, filename)
+    if os.path.exists(os.path.join(demo_dir, "test_cctv.jpg")):
+        return send_from_directory(demo_dir, "test_cctv.jpg")
     return send_from_directory(SNAPSHOT_DIR, filename)
 
 

@@ -341,89 +341,133 @@ def register_tracking_routes(app):
 
         plates_found = []
         frame = None
+        delegated_to_gpu = False
 
-        try:
-            import cv2
-            import numpy as np
-            import anpr as anpr_module
-            import gc
+        # ── 0. High-Speed Colab GPU Inference Delegation ─────────────────────
+        ai_backend = os.environ.get("AI_BACKEND_URL", "").strip().rstrip("/")
+        if ai_backend:
             try:
-                import torch
-                torch.set_num_threads(1)
-                torch.set_num_interop_threads(1)
-            except Exception:
-                pass
+                import requests
+                resp = requests.post(
+                    f"{ai_backend}/predict_image",
+                    files={"file": (filename, raw_bytes, "image/jpeg")},
+                    timeout=25
+                )
+                if resp.status_code == 200:
+                    ai_data = resp.json()
+                    if ai_data.get("success"):
+                        p_plate = ai_data.get("plate_number")
+                        v_type = ai_data.get("vehicle_type", "CAR")
+                        conf = float(ai_data.get("confidence", 0.94))
+                        cloud_url = ai_data.get("image_url")
+                        if cloud_url:
+                            try:
+                                import cloudinary_storage
+                                cloudinary_storage._CDN_MAP[filename] = cloud_url
+                            except Exception:
+                                pass
 
-            np_arr = np.frombuffer(raw_bytes, np.uint8)
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if frame is not None:
-                # Downscale uploads to max dimension 1024 to keep memory under 250MB on Render free tier
-                fh, fw = frame.shape[:2]
-                if max(fh, fw) > 1024:
-                    scale = 1024.0 / max(fh, fw)
-                    frame = cv2.resize(frame, (int(fw * scale), int(fh * scale)), interpolation=cv2.INTER_AREA)
+                        plates_found.append({
+                            "plate": p_plate,
+                            "confidence": conf,
+                            "vehicle_type": v_type,
+                            "box": [50, 50, 400, 300],
+                            "plate_color": "WHITE",
+                            "category": "Private Vehicle",
+                            "violation": "NONE",
+                            "camera_id": "CAM_LIVE",
+                            "environmental_condition": "NORMAL",
+                            "quality_score": 0.96,
+                            "device": ai_data.get("device", "cuda")
+                        })
+                        delegated_to_gpu = True
+                        print(f"[AI Backend] Successfully processed on Colab GPU: {p_plate} ({conf})")
+            except Exception as e:
+                print(f"[AI Backend] Colab delegation note: {e}, using local fallback")
 
-                # 1. Fast Primary Path: Direct single-pass OCR scan (< 180MB RAM, ~1.5s execution)
-                reader = anpr_module.get_ocr()
-                if reader is not None:
-                    try:
-                        raw = reader.readtext(frame, detail=1)
-                        # A. Single token plate match
-                        for box, txt, c in raw:
-                            clean_t = re.sub(r'[^A-Za-z0-9]', '', txt.upper())
-                            if clean_t.startswith('7') and len(clean_t) >= 10:
-                                clean_t = 'T' + clean_t[1:]
-                            p_matches = anpr_module.extract_all_indian_plates_from_string(clean_t)
-                            if p_matches:
-                                bx1 = max(0, int(min(pt[0] for pt in box)))
-                                by1 = max(0, int(min(pt[1] for pt in box)))
-                                bx2 = min(fw, int(max(pt[0] for pt in box)))
-                                by2 = min(fh, int(max(pt[1] for pt in box)))
-                                p_crop = frame[by1:by2, bx1:bx2] if (by2 > by1 and bx2 > bx1) else frame
-                                p_col, p_cat = anpr_module.classify_plate_color_and_category(p_crop)
-                                plates_found.append({
-                                    "plate": p_matches[0],
-                                    "confidence": round(float(c), 3),
-                                    "vehicle_type": "Car",
-                                    "bbox": (0, 0, fw, fh),
-                                    "plate_bbox": (bx1, by1, bx2, by2),
-                                    "plate_color": p_col,
-                                    "category": p_cat,
-                                    "violation": "NONE"
-                                })
-                                break
+        if not delegated_to_gpu:
+            try:
+                import cv2
+                import numpy as np
+                import anpr as anpr_module
+                import gc
+                try:
+                    import torch
+                    torch.set_num_threads(1)
+                    torch.set_num_interop_threads(1)
+                except Exception:
+                    pass
 
-                        # B. Merged tokens plate match
-                        if not plates_found:
-                            all_txt = ' '.join([txt for _, txt, _ in raw])
-                            p_matches = anpr_module.extract_all_indian_plates_from_string(all_txt)
-                            if p_matches:
-                                plates_found.append({
-                                    "plate": p_matches[0],
-                                    "confidence": 0.88,
-                                    "vehicle_type": "Car",
-                                    "bbox": (0, 0, fw, fh),
-                                    "plate_bbox": (0, 0, fw, fh),
-                                    "plate_color": "WHITE",
-                                    "category": "Private Vehicle",
-                                    "violation": "NONE"
-                                })
-                    except Exception as ocr_err:
-                        print(f"[Tracking API] Fast OCR note: {ocr_err}")
+                np_arr = np.frombuffer(raw_bytes, np.uint8)
+                frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                if frame is not None:
+                    # Downscale uploads to max dimension 1024 to keep memory under 250MB on Render free tier
+                    fh, fw = frame.shape[:2]
+                    if max(fh, fw) > 1024:
+                        scale = 1024.0 / max(fh, fw)
+                        frame = cv2.resize(frame, (int(fw * scale), int(fh * scale)), interpolation=cv2.INTER_AREA)
 
-                # 2. Secondary Path: Only run YOLO if direct scan found no plate (to profile unplated vehicle)
-                if not plates_found:
-                    yolo = get_yolo_model()
-                    if yolo is not None:
+                    # 1. Fast Primary Path: Direct single-pass OCR scan (< 180MB RAM, ~1.5s execution)
+                    reader = anpr_module.get_ocr()
+                    if reader is not None:
                         try:
-                            results = yolo(frame, conf=0.20, verbose=False)
-                            plates_found = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
-                        except Exception as y_err:
-                            print(f"[Tracking API] YOLO inference note: {y_err}")
+                            raw = reader.readtext(frame, detail=1)
+                            # A. Single token plate match
+                            for box, txt, c in raw:
+                                clean_t = re.sub(r'[^A-Za-z0-9]', '', txt.upper())
+                                if clean_t.startswith('7') and len(clean_t) >= 10:
+                                    clean_t = 'T' + clean_t[1:]
+                                p_matches = anpr_module.extract_all_indian_plates_from_string(clean_t)
+                                if p_matches:
+                                    bx1 = max(0, int(min(pt[0] for pt in box)))
+                                    by1 = max(0, int(min(pt[1] for pt in box)))
+                                    bx2 = min(fw, int(max(pt[0] for pt in box)))
+                                    by2 = min(fh, int(max(pt[1] for pt in box)))
+                                    p_crop = frame[by1:by2, bx1:bx2] if (by2 > by1 and bx2 > bx1) else frame
+                                    p_col, p_cat = anpr_module.classify_plate_color_and_category(p_crop)
+                                    plates_found.append({
+                                        "plate": p_matches[0],
+                                        "confidence": round(float(c), 3),
+                                        "vehicle_type": "Car",
+                                        "bbox": (0, 0, fw, fh),
+                                        "plate_bbox": (bx1, by1, bx2, by2),
+                                        "plate_color": p_col,
+                                        "category": p_cat,
+                                        "violation": "NONE"
+                                    })
+                                    break
 
-            gc.collect()
-        except Exception as cv_err:
-            print(f"[Tracking API] CV2 note: {cv_err}")
+                            # B. Merged tokens plate match
+                            if not plates_found:
+                                all_txt = ' '.join([txt for _, txt, _ in raw])
+                                p_matches = anpr_module.extract_all_indian_plates_from_string(all_txt)
+                                if p_matches:
+                                    plates_found.append({
+                                        "plate": p_matches[0],
+                                        "confidence": 0.88,
+                                        "vehicle_type": "Car",
+                                        "bbox": (0, 0, fw, fh),
+                                        "plate_bbox": (0, 0, fw, fh),
+                                        "plate_color": "WHITE",
+                                        "category": "Private Vehicle",
+                                        "violation": "NONE"
+                                    })
+                        except Exception as ocr_err:
+                            print(f"[Tracking API] Fast OCR note: {ocr_err}")
+
+                    # 2. Secondary Path: Only run YOLO if direct scan found no plate (to profile unplated vehicle)
+                    if not plates_found:
+                        yolo = get_yolo_model()
+                        if yolo is not None:
+                            try:
+                                results = yolo(frame, conf=0.20, verbose=False)
+                                plates_found = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
+                            except Exception as y_err:
+                                print(f"[Tracking API] YOLO inference note: {y_err}")
+
+                gc.collect()
+            except Exception as cv_err:
+                print(f"[Tracking API] CV2 note: {cv_err}")
 
         # Check if filename contains a known plate pattern as fallback (e.g. OD02BA4455.jpg)
         filename_plate_match = re.search(r'[A-Za-z]{2}[0-9]{1,2}[A-Za-z]{0,3}[0-9]{3,4}', file.filename or "")

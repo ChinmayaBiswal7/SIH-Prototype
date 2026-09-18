@@ -653,7 +653,7 @@ def scan_frame_for_plates(frame):
     found_plates_set = set()
 
     # ── Strategy 1: multi_pass_ocr directly on frame ─────────────
-    plate1, conf1 = multi_pass_ocr_on_plate(frame, max_passes=4)
+    plate1, conf1 = multi_pass_ocr_on_plate(frame, max_passes=2)
     if plate1 and plate1 not in found_plates_set:
         found_plates_set.add(plate1)
         res = _sequence_fusion.add_frame_observation(
@@ -672,7 +672,7 @@ def scan_frame_for_plates(frame):
         try:
             plate_crop = find_plate_region_in_crop(frame)
             if plate_crop is not None and plate_crop.size > 0:
-                p_reg, c_reg = multi_pass_ocr_on_plate(plate_crop, max_passes=4)
+                p_reg, c_reg = multi_pass_ocr_on_plate(plate_crop, max_passes=2)
                 if p_reg and p_reg not in found_plates_set:
                     found_plates_set.add(p_reg)
                     res_reg = _sequence_fusion.add_frame_observation(
@@ -693,7 +693,7 @@ def scan_frame_for_plates(frame):
         cx1, cx2 = int(w * 0.05), int(w * 0.95)
         center_crop = frame[cy1:cy2, cx1:cx2]
         if center_crop.size > 0:
-            plate2, conf2 = multi_pass_ocr_on_plate(center_crop, max_passes=4)
+            plate2, conf2 = multi_pass_ocr_on_plate(center_crop, max_passes=2)
             if plate2 and plate2 not in found_plates_set:
                 found_plates_set.add(plate2)
                 res2 = _sequence_fusion.add_frame_observation(

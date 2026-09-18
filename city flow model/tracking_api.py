@@ -331,6 +331,12 @@ def register_tracking_routes(app):
             np_arr = np.frombuffer(raw_bytes, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             if frame is not None:
+                # Downscale oversized mobile uploads (e.g. 4000x3000) to max width 1280 preserving sharpness
+                fh, fw = frame.shape[:2]
+                if fw > 1280:
+                    scale = 1280.0 / fw
+                    frame = cv2.resize(frame, (1280, int(fh * scale)), interpolation=cv2.INTER_AREA)
+
                 # 1. Run YOLO to identify vehicle in frame, then ANPR to find plate
                 yolo = get_yolo_model()
                 if yolo is not None:
@@ -963,7 +969,21 @@ def register_tracking_routes(app):
         return jsonify({"success": True, "message": "Triggered Firebase multi-camera demo journey seeding."})
 
     _start_background_sync()
+    _prewarm_ai_models()
     print("[Tracking API] All ANPR Vehicle Tracking routes successfully registered!")
+
+
+def _prewarm_ai_models():
+    """Pre-warms YOLO and EasyOCR in background on startup so first user upload is instant."""
+    def _worker():
+        try:
+            get_yolo_model()
+            import anpr
+            anpr.get_ocr()
+            print("[Tracking API] AI Vision models (YOLOv8 + EasyOCR) pre-warmed & ready for instant inference.")
+        except Exception as e:
+            print(f"[Tracking API] Pre-warm note: {e}")
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def _start_background_sync():

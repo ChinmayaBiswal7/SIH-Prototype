@@ -12,7 +12,7 @@ import time
 import random
 import threading
 from datetime import datetime
-from flask import jsonify, request, send_from_directory, Response
+from flask import jsonify, request, send_from_directory, Response, redirect
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(CURRENT_DIR)
@@ -321,6 +321,13 @@ def register_tracking_routes(app):
         try:
             with open(snap_path, "wb") as f:
                 f.write(raw_bytes)
+        except Exception:
+            pass
+
+        # Upload raw snapshot to Cloudinary CDN in background
+        try:
+            import cloudinary_storage
+            cloudinary_storage.upload_image_async(raw_bytes, filename=filename)
         except Exception:
             pass
 
@@ -997,6 +1004,18 @@ def register_tracking_routes(app):
     # -------------------------------------------------------------------
     @app.route("/api/snapshot/<path:filename>")
     def api_snapshot(filename):
+        if filename.startswith("http://") or filename.startswith("https://"):
+            return redirect(filename)
+
+        # Check Cloudinary CDN cache for permanent high-speed CDN serving
+        try:
+            import cloudinary_storage
+            cdn_url = cloudinary_storage.get_cached_url(filename)
+            if cdn_url:
+                return redirect(cdn_url)
+        except Exception:
+            pass
+
         # 1. Primary: user uploaded or live captured snapshot in SNAPSHOT_DIR
         target = os.path.join(SNAPSHOT_DIR, filename)
         if os.path.exists(target):
@@ -1013,13 +1032,8 @@ def register_tracking_routes(app):
         if os.path.exists(cctv_fallback):
             return send_from_directory(demo_dir, "test_cctv.jpg")
 
-        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
-            <rect width="320" height="180" fill="#0f172a"/>
-            <rect x="10" y="10" width="300" height="160" fill="#1e293b" rx="8"/>
-            <text x="160" y="85" fill="#38bdf8" font-family="monospace" font-size="14" text-anchor="middle" font-weight="bold">CCTV SNAPSHOT</text>
-            <text x="160" y="110" fill="#94a3b8" font-family="sans-serif" font-size="11" text-anchor="middle">{filename}</text>
-        </svg>"""
-        return Response(svg, mimetype="image/svg+xml")
+        # 4. Ultimate CDN fallback to Cloudinary permanent CCTV snapshot
+        return redirect("https://res.cloudinary.com/me4hfkhj/image/upload/v1789706881/test_cctv.jpg")
 
     # -------------------------------------------------------------------
     # Firebase Cloud Central Sync Management Endpoints

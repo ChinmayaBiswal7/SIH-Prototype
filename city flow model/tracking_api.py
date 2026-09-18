@@ -346,50 +346,52 @@ def register_tracking_routes(app):
         # ── 0. High-Speed Colab GPU Inference Delegation ─────────────────────
         ai_backend = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
         if ai_backend:
-            try:
-                import requests
-                resp = requests.post(
-                    f"{ai_backend}/predict_image",
-                    files={"file": (filename, raw_bytes, "image/jpeg")},
-                    timeout=25
-                )
-                if resp.status_code == 200:
-                    ai_data = resp.json()
-                    if ai_data.get("success"):
-                        p_plate = ai_data.get("plate_number")
-                        has_plate = ai_data.get("has_plate", bool(p_plate and p_plate not in ["NONE", "UNPLATED"]))
-                        v_type = ai_data.get("vehicle_type", "CAR")
-                        conf = float(ai_data.get("confidence", 0.94))
-                        cloud_url = ai_data.get("image_url")
-                        if cloud_url:
-                            try:
-                                import cloudinary_storage
-                                cloudinary_storage._CDN_MAP[filename] = cloud_url
-                            except Exception:
-                                pass
+            for attempt in range(2):
+                try:
+                    import requests
+                    resp = requests.post(
+                        f"{ai_backend}/predict_image",
+                        files={"file": (filename, raw_bytes, "image/jpeg")},
+                        timeout=25
+                    )
+                    if resp.status_code == 200:
+                        ai_data = resp.json()
+                        if ai_data.get("success"):
+                            p_plate = ai_data.get("plate_number")
+                            has_plate = ai_data.get("has_plate", bool(p_plate and p_plate not in ["NONE", "UNPLATED"]))
+                            v_type = ai_data.get("vehicle_type", "CAR")
+                            conf = float(ai_data.get("confidence", 0.94))
+                            cloud_url = ai_data.get("image_url")
+                            if cloud_url:
+                                try:
+                                    import cloudinary_storage
+                                    cloudinary_storage._CDN_MAP[filename] = cloud_url
+                                except Exception:
+                                    pass
 
-                        if has_plate and p_plate and p_plate not in ["NONE", "UNPLATED"]:
-                            plates_found.append({
-                                "plate": p_plate,
-                                "confidence": conf,
-                                "vehicle_type": v_type,
-                                "box": [50, 50, 400, 300],
-                                "plate_color": "WHITE",
-                                "category": "Private Vehicle",
-                                "violation": "NONE",
-                                "camera_id": "CAM_LIVE",
-                                "environmental_condition": "NORMAL",
-                                "quality_score": 0.96,
-                                "device": ai_data.get("device", "cuda")
-                            })
-                            print(f"[AI Backend] Real plate detected on Colab GPU: {p_plate} ({conf})")
-                        else:
-                            print(f"[AI Backend] No plate detected on vehicle on Colab GPU -> triggering Unplated Forensic Profiler")
-                            plates_found = []
+                            if has_plate and p_plate and p_plate not in ["NONE", "UNPLATED"]:
+                                plates_found.append({
+                                    "plate": p_plate,
+                                    "confidence": conf,
+                                    "vehicle_type": v_type,
+                                    "box": [50, 50, 400, 300],
+                                    "plate_color": "WHITE",
+                                    "category": "Private Vehicle",
+                                    "violation": "NONE",
+                                    "camera_id": "CAM_LIVE",
+                                    "environmental_condition": "NORMAL",
+                                    "quality_score": 0.96,
+                                    "device": ai_data.get("device", "cuda")
+                                })
+                                print(f"[AI Backend] Real plate detected on Colab GPU: {p_plate} ({conf})")
+                            else:
+                                print(f"[AI Backend] No plate detected on vehicle on Colab GPU -> triggering Unplated Forensic Profiler")
+                                plates_found = []
 
-                        delegated_to_gpu = True
-            except Exception as e:
-                print(f"[AI Backend] Colab delegation note: {e}, using local fallback")
+                            delegated_to_gpu = True
+                            break
+                except Exception as e:
+                    print(f"[AI Backend] Colab delegation note (attempt {attempt+1}): {e}")
 
         if not delegated_to_gpu:
             try:
@@ -699,6 +701,19 @@ def register_tracking_routes(app):
 
         with _cam_lock:
             _latest_live_detections[:] = out_detections
+
+        # ── Aggressive Memory Purge: Wipe RAM Clean for Next Upload ──────────
+        try:
+            del raw_bytes
+        except Exception:
+            pass
+        try:
+            if frame is not None:
+                del frame
+        except Exception:
+            pass
+        import gc
+        gc.collect()
 
         return jsonify({
             "success": True,

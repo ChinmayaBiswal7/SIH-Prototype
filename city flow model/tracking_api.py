@@ -344,7 +344,7 @@ def register_tracking_routes(app):
         delegated_to_gpu = False
 
         # ── 0. High-Speed Colab GPU Inference Delegation ─────────────────────
-        ai_backend = os.environ.get("AI_BACKEND_URL", "").strip().rstrip("/")
+        ai_backend = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
         if ai_backend:
             try:
                 import requests
@@ -737,7 +737,7 @@ def register_tracking_routes(app):
 
         def bg_worker():
             detected_records = []
-            ai_backend = os.environ.get("AI_BACKEND_URL", "").strip().rstrip("/")
+            ai_backend = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
             colab_video_done = False
             
             # ── 1. Fast Path: High-Speed Colab GPU Video Processing ──

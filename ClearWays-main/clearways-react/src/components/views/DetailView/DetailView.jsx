@@ -56,16 +56,16 @@ export default function DetailView({ intersection, onBack, onUpdateLane, onRever
 
         <div className="dv-stats">
           <div className="dv-stat-item">
-            <span className="dv-stat-val">{intersection.vehicleCount}</span>
-            <span className="dv-stat-lbl">Vehicles</span>
+            <span className="dv-stat-val">{intersection.congestionPct}%</span>
+            <span className="dv-stat-lbl">Density</span>
           </div>
           <div className="dv-stat-item">
             <span className="dv-stat-val">{intersection.averageSpeed}</span>
             <span className="dv-stat-lbl">km/h</span>
           </div>
           <div className="dv-stat-item">
-            <span className="dv-stat-val">{intersection.congestionPct}%</span>
-            <span className="dv-stat-lbl">Load</span>
+            <span className="dv-stat-val">{intersection.vehicleCount}</span>
+            <span className="dv-stat-lbl">Queued</span>
           </div>
         </div>
       </div>

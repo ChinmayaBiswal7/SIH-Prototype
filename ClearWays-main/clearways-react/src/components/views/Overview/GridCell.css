@@ -54,6 +54,13 @@
 .cell-count.medium   { color: var(--amber); }
 .cell-count.critical { color: var(--red);   }
 
+.cell-unit {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.85;
+  margin-left: 1px;
+}
+
 .cell-speed {
   font-size: 0.62rem;
   font-weight: 500;

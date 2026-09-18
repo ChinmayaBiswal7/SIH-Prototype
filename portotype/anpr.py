@@ -397,12 +397,11 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
     if img is None or img.size == 0:
         return None, 0.0
 
-    # Ensure PyTorch utilizes all available CPU threads
+    # Ensure PyTorch uses single-thread mode to stay strictly within 512MB RAM
     try:
         import torch
-        if not torch.cuda.is_available():
-            import os
-            torch.set_num_threads(os.cpu_count() or 4)
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
     except Exception:
         pass
 

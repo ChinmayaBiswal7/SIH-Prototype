@@ -43,5 +43,5 @@ EXPOSE 5000
 
 WORKDIR /app/cityflow_model
 
-# Run with Gunicorn production WSGI server
-CMD exec gunicorn --workers 1 --threads 4 --bind 0.0.0.0:${PORT:-5000} --timeout 120 server_standalone:app
+# Run with Gunicorn production WSGI server (1 worker, 1 thread to stay strictly within 512MB RAM)
+CMD exec gunicorn --workers 1 --threads 1 --bind 0.0.0.0:${PORT:-5000} --timeout 120 server_standalone:app

@@ -339,37 +339,82 @@ def register_tracking_routes(app):
             import cv2
             import numpy as np
             import anpr as anpr_module
+            import gc
+            try:
+                import torch
+                torch.set_num_threads(1)
+                torch.set_num_interop_threads(1)
+            except Exception:
+                pass
+
             np_arr = np.frombuffer(raw_bytes, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             if frame is not None:
-                # Downscale oversized mobile uploads (e.g. 4000x3000) to max width 1280 preserving sharpness
+                # Downscale uploads to max dimension 1024 to keep memory under 250MB on Render free tier
                 fh, fw = frame.shape[:2]
-                if fw > 1280:
-                    scale = 1280.0 / fw
-                    frame = cv2.resize(frame, (1280, int(fh * scale)), interpolation=cv2.INTER_AREA)
+                if max(fh, fw) > 1024:
+                    scale = 1024.0 / max(fh, fw)
+                    frame = cv2.resize(frame, (int(fw * scale), int(fh * scale)), interpolation=cv2.INTER_AREA)
 
-                # 1. Run YOLO to identify vehicle in frame, then ANPR to find plate
-                yolo = get_yolo_model()
-                if yolo is not None:
+                # 1. Fast Primary Path: Direct single-pass OCR scan (< 180MB RAM, ~1.5s execution)
+                reader = anpr_module.get_ocr()
+                if reader is not None:
                     try:
-                        results = yolo(frame, conf=0.18, verbose=False)
-                        plates_found = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
-                    except Exception as y_err:
-                        print(f"[Tracking API] YOLO inference note: {y_err}")
+                        raw = reader.readtext(frame, detail=1)
+                        # A. Single token plate match
+                        for box, txt, c in raw:
+                            clean_t = re.sub(r'[^A-Za-z0-9]', '', txt.upper())
+                            if clean_t.startswith('7') and len(clean_t) >= 10:
+                                clean_t = 'T' + clean_t[1:]
+                            p_matches = anpr_module.extract_all_indian_plates_from_string(clean_t)
+                            if p_matches:
+                                bx1 = max(0, int(min(pt[0] for pt in box)))
+                                by1 = max(0, int(min(pt[1] for pt in box)))
+                                bx2 = min(fw, int(max(pt[0] for pt in box)))
+                                by2 = min(fh, int(max(pt[1] for pt in box)))
+                                p_crop = frame[by1:by2, bx1:bx2] if (by2 > by1 and bx2 > bx1) else frame
+                                p_col, p_cat = anpr_module.classify_plate_color_and_category(p_crop)
+                                plates_found.append({
+                                    "plate": p_matches[0],
+                                    "confidence": round(float(c), 3),
+                                    "vehicle_type": "Car",
+                                    "bbox": (0, 0, fw, fh),
+                                    "plate_bbox": (bx1, by1, bx2, by2),
+                                    "plate_color": p_col,
+                                    "category": p_cat,
+                                    "violation": "NONE"
+                                })
+                                break
 
-                # 2. If YOLO found zero plates OR if it prematurely flagged MISSING_OR_COVERED_PLATE,
-                # verify with direct multi-pass frame scan so real plates (like TN87C5106) are never falsely tagged unplated!
-                has_real_plate = any(p.get("violation") != "MISSING_OR_COVERED_PLATE" and "NO PLATE" not in p.get("plate", "") for p in plates_found)
-                if not has_real_plate:
-                    try:
-                        direct_plates = anpr_module.scan_frame_for_plates(frame)
-                        direct_valid = [p for p in direct_plates if p.get("violation") != "MISSING_OR_COVERED_PLATE" and "NO PLATE" not in p.get("plate", "")]
-                        if direct_valid:
-                            plates_found = direct_valid
-                        elif not plates_found:
-                            plates_found = direct_plates
-                    except Exception as s_err:
-                        print(f"[Tracking API] Scan frame note: {s_err}")
+                        # B. Merged tokens plate match
+                        if not plates_found:
+                            all_txt = ' '.join([txt for _, txt, _ in raw])
+                            p_matches = anpr_module.extract_all_indian_plates_from_string(all_txt)
+                            if p_matches:
+                                plates_found.append({
+                                    "plate": p_matches[0],
+                                    "confidence": 0.88,
+                                    "vehicle_type": "Car",
+                                    "bbox": (0, 0, fw, fh),
+                                    "plate_bbox": (0, 0, fw, fh),
+                                    "plate_color": "WHITE",
+                                    "category": "Private Vehicle",
+                                    "violation": "NONE"
+                                })
+                    except Exception as ocr_err:
+                        print(f"[Tracking API] Fast OCR note: {ocr_err}")
+
+                # 2. Secondary Path: Only run YOLO if direct scan found no plate (to profile unplated vehicle)
+                if not plates_found:
+                    yolo = get_yolo_model()
+                    if yolo is not None:
+                        try:
+                            results = yolo(frame, conf=0.20, verbose=False)
+                            plates_found = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
+                        except Exception as y_err:
+                            print(f"[Tracking API] YOLO inference note: {y_err}")
+
+            gc.collect()
         except Exception as cv_err:
             print(f"[Tracking API] CV2 note: {cv_err}")
 

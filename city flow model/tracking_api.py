@@ -357,6 +357,7 @@ def register_tracking_routes(app):
                     ai_data = resp.json()
                     if ai_data.get("success"):
                         p_plate = ai_data.get("plate_number")
+                        has_plate = ai_data.get("has_plate", bool(p_plate and p_plate not in ["NONE", "UNPLATED"]))
                         v_type = ai_data.get("vehicle_type", "CAR")
                         conf = float(ai_data.get("confidence", 0.94))
                         cloud_url = ai_data.get("image_url")
@@ -367,21 +368,26 @@ def register_tracking_routes(app):
                             except Exception:
                                 pass
 
-                        plates_found.append({
-                            "plate": p_plate,
-                            "confidence": conf,
-                            "vehicle_type": v_type,
-                            "box": [50, 50, 400, 300],
-                            "plate_color": "WHITE",
-                            "category": "Private Vehicle",
-                            "violation": "NONE",
-                            "camera_id": "CAM_LIVE",
-                            "environmental_condition": "NORMAL",
-                            "quality_score": 0.96,
-                            "device": ai_data.get("device", "cuda")
-                        })
+                        if has_plate and p_plate and p_plate not in ["NONE", "UNPLATED"]:
+                            plates_found.append({
+                                "plate": p_plate,
+                                "confidence": conf,
+                                "vehicle_type": v_type,
+                                "box": [50, 50, 400, 300],
+                                "plate_color": "WHITE",
+                                "category": "Private Vehicle",
+                                "violation": "NONE",
+                                "camera_id": "CAM_LIVE",
+                                "environmental_condition": "NORMAL",
+                                "quality_score": 0.96,
+                                "device": ai_data.get("device", "cuda")
+                            })
+                            print(f"[AI Backend] Real plate detected on Colab GPU: {p_plate} ({conf})")
+                        else:
+                            print(f"[AI Backend] No plate detected on vehicle on Colab GPU -> triggering Unplated Forensic Profiler")
+                            plates_found = []
+
                         delegated_to_gpu = True
-                        print(f"[AI Backend] Successfully processed on Colab GPU: {p_plate} ({conf})")
             except Exception as e:
                 print(f"[AI Backend] Colab delegation note: {e}, using local fallback")
 
@@ -546,6 +552,13 @@ def register_tracking_routes(app):
         else:
             # THIS IS AN UNPLATED SUSPECT VEHICLE (MISSING OR COVERED PLATE)!
             v_prof = None
+            if frame is None:
+                try:
+                    import cv2
+                    import numpy as np
+                    frame = cv2.imdecode(np.frombuffer(raw_bytes, np.uint8), cv2.IMREAD_COLOR)
+                except Exception:
+                    pass
             try:
                 import vehicle_profiler
                 v_prof = vehicle_profiler.extract_vehicle_profile(frame if frame is not None else None, vehicle_type="Car")

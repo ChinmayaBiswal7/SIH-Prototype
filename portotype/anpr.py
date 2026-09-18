@@ -391,11 +391,11 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
     reader = get_ocr()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img.copy()
 
-    # Resize large crops to max width 280px & max height 90px for ultra-fast 200ms inference
+    # Resize large crops to max height 140px preserving aspect ratio for sharp OCR inference
     gh, gw = gray.shape[:2]
-    if gw > 280 or gh > 90:
-        scale = min(280.0 / max(1, gw), 90.0 / max(1, gh))
-        gray = cv2.resize(gray, (max(1, int(gw * scale)), max(1, int(gh * scale))), interpolation=cv2.INTER_AREA)
+    if gh > 140:
+        scale = 140.0 / gh
+        gray = cv2.resize(gray, (int(gw * scale), 140), interpolation=cv2.INTER_AREA)
 
     # Apply CLAHE to dramatically boost character contrast against plate background
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -410,7 +410,15 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
         p2_gray = cv2.addWeighted(up, 1.5, blur, -0.5, 0)
         versions.append(cv2.cvtColor(p2_gray, cv2.COLOR_GRAY2BGR))
 
-    # Fast-path: lightweight Tesseract OCR (< 25MB RAM, ~30ms)
+    if max_passes >= 3:
+        _, otsu = cv2.threshold(gray_clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        versions.append(cv2.cvtColor(otsu, cv2.COLOR_GRAY2BGR))
+
+    if max_passes >= 4:
+        _, otsu = cv2.threshold(gray_clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        versions.append(cv2.cvtColor(cv2.bitwise_not(otsu), cv2.COLOR_GRAY2BGR))
+
+    # Fast-path: lightweight Tesseract OCR (< 25MB RAM, ~30ms) if available
     try:
         import pytesseract
         for ver in versions:
@@ -424,8 +432,7 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
     candidates = []
 
     if reader is not None:
-        # Limit to first 2 passes max for instant execution
-        for pass_idx, ver in enumerate(versions[:min(2, max_passes)]):
+        for pass_idx, ver in enumerate(versions[:max_passes]):
             try:
                 results = reader.readtext(ver, detail=1, paragraph=False,
                                           contrast_ths=0.05, adjust_contrast=0.5,
@@ -629,11 +636,6 @@ def scan_frame_for_plates(frame):
         return []
 
     h, w = frame.shape[:2]
-    if w > 480:
-        scale = 480.0 / w
-        frame = cv2.resize(frame, (480, int(h * scale)), interpolation=cv2.INTER_AREA)
-        h, w = frame.shape[:2]
-
     telemetry = quality.assess_image_quality(frame, is_scene_frame=False)
     reader = get_ocr()
 
@@ -641,7 +643,7 @@ def scan_frame_for_plates(frame):
     found_plates_set = set()
 
     # ── Strategy 1: multi_pass_ocr directly on frame ─────────────
-    plate1, conf1 = multi_pass_ocr_on_plate(frame, max_passes=2)
+    plate1, conf1 = multi_pass_ocr_on_plate(frame, max_passes=4)
     if plate1 and plate1 not in found_plates_set:
         found_plates_set.add(plate1)
         res = _sequence_fusion.add_frame_observation(

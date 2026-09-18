@@ -23,6 +23,13 @@ export default function LaneBreakdown({ intersection, onOpenCCTV }) {
                   <i className={`fas ${lane.manualActive ? "fa-hand-pointer" : "fa-robot"}`} />
                   {lane.manualActive ? "Manual" : "AI Control"}
                 </div>
+                <button
+                  className="lane-cctv-btn"
+                  onClick={() => onOpenCCTV?.(lane.direction)}
+                  title={`Open Live CCTV Feed for ${lane.direction} corridor`}
+                >
+                  <i className="fas fa-video" /> CCTV
+                </button>
               </div>
             </div>
           );

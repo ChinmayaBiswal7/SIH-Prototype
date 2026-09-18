@@ -70,44 +70,54 @@ def classify_plate_color_and_category(plate_crop):
     """
     Analyzes HSV color channels of plate crop to detect MoRTH Indian plate category:
     - White + Black text: Private / Personal Vehicle
-    - Yellow + Black text: Commercial / Taxi / Transport
+    - Bright Yellow + Black text: Commercial / Taxi / Transport
     - Green + White/Yellow text: Electric Vehicle (EV)
     - Blue + White text: Diplomatic / UN Vehicle
     - Red + White text: Official / Executive / Temporary
-    - Black + Yellow text: Self-Drive Rental / Commercial
     """
     if plate_crop is None or plate_crop.size == 0:
-        return "WHITE", "Private / Personal Vehicle"
+        return "WHITE", "Private Vehicle"
 
-    hsv = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2HSV)
-    h_chan, s_chan, v_chan = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    h, w = plate_crop.shape[:2]
+
+    # If the crop passed in is a full vehicle or wide scene frame, isolate the lower bumper area
+    crop_to_analyze = plate_crop
+    if h > 160 or w > 400:
+        crop_to_analyze = plate_crop[int(h * 0.40):int(h * 0.95), int(w * 0.15):int(w * 0.85)]
+        if crop_to_analyze.size == 0:
+            crop_to_analyze = plate_crop
+
+    hsv = cv2.cvtColor(crop_to_analyze, cv2.COLOR_BGR2HSV)
     total_pixels = float(hsv.shape[0] * hsv.shape[1])
+    if total_pixels <= 0:
+        return "WHITE", "Private Vehicle"
 
-    # 1. Yellow (Commercial / Taxi / Transport)
-    yellow_mask = cv2.inRange(hsv, np.array([12, 60, 70]), np.array([38, 255, 255]))
+    # White plate: low saturation, high brightness
+    white_mask = cv2.inRange(hsv, np.array([0, 0, 150]), np.array([180, 55, 255]))
+    white_ratio = float(np.sum(white_mask > 0)) / total_pixels
+
+    # Commercial Yellow plate: vibrant saturated yellow (S >= 95, V >= 120)
+    yellow_mask = cv2.inRange(hsv, np.array([15, 95, 120]), np.array([35, 255, 255]))
     yellow_ratio = float(np.sum(yellow_mask > 0)) / total_pixels
 
-    # 2. Green (Electric Vehicle EV)
-    green_mask = cv2.inRange(hsv, np.array([35, 50, 50]), np.array([88, 255, 255]))
+    # Green plate (EV)
+    green_mask = cv2.inRange(hsv, np.array([38, 70, 70]), np.array([85, 255, 255]))
     green_ratio = float(np.sum(green_mask > 0)) / total_pixels
 
-    # 3. Blue (Diplomatic / UN)
-    blue_mask = cv2.inRange(hsv, np.array([90, 60, 60]), np.array([135, 255, 255]))
+    # Blue plate (Diplomatic)
+    blue_mask = cv2.inRange(hsv, np.array([95, 80, 70]), np.array([130, 255, 255]))
     blue_ratio = float(np.sum(blue_mask > 0)) / total_pixels
 
-    # 4. Red (Executive / Governor / Temp)
-    red1 = cv2.inRange(hsv, np.array([0, 70, 70]), np.array([10, 255, 255]))
-    red2 = cv2.inRange(hsv, np.array([165, 70, 70]), np.array([180, 255, 255]))
-    red_ratio = float(np.sum(cv2.bitwise_or(red1, red2) > 0)) / total_pixels
+    # If white plate background is prominent, it's definitely a Private Vehicle
+    if white_ratio >= 0.10 and white_ratio > (yellow_ratio * 1.5):
+        return "WHITE", "Private Vehicle"
 
-    if yellow_ratio >= 0.16:
+    if yellow_ratio >= 0.30 and yellow_ratio > white_ratio:
         return "YELLOW", "Commercial / Taxi"
-    elif green_ratio >= 0.16:
+    elif green_ratio >= 0.25:
         return "GREEN", "Electric Vehicle (EV)"
-    elif blue_ratio >= 0.16:
+    elif blue_ratio >= 0.25:
         return "BLUE", "Diplomatic / UN"
-    elif red_ratio >= 0.16:
-        return "RED", "Official / Executive"
     else:
         return "WHITE", "Private Vehicle"
 

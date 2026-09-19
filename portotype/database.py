@@ -125,39 +125,28 @@ def init_db():
             voting_data  TEXT    DEFAULT ''
         )
     """)
-    try:
-        c.execute("ALTER TABLE detections ADD COLUMN image_path TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE detections ADD COLUMN voting_data TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE detections ADD COLUMN env_condition TEXT DEFAULT 'NORMAL'")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE detections ADD COLUMN quality_score REAL DEFAULT 0.85")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE detections ADD COLUMN plate_color TEXT DEFAULT 'WHITE'")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE detections ADD COLUMN category TEXT DEFAULT 'Private Vehicle'")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        c.execute("ALTER TABLE detections ADD COLUMN violation TEXT DEFAULT 'NONE'")
-    except sqlite3.OperationalError:
-        pass
-
+    for col, col_type in [
+        ("image_path", "TEXT DEFAULT ''"),
+        ("voting_data", "TEXT DEFAULT ''"),
+        ("env_condition", "TEXT DEFAULT 'NORMAL'"),
+        ("quality_score", "REAL DEFAULT 0.85"),
+        ("plate_color", "TEXT DEFAULT 'WHITE'"),
+        ("category", "TEXT DEFAULT 'Private Vehicle'"),
+        ("violation", "TEXT DEFAULT 'NONE'"),
+        ("occlusion_status", "TEXT DEFAULT 'NONE'"),
+        ("occlusion_reason", "TEXT DEFAULT ''"),
+        ("matched_plate", "TEXT DEFAULT ''"),
+        ("vehicle_profile", "TEXT DEFAULT '{}'")
+    ]:
+        try:
+            c.execute(f"ALTER TABLE detections ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass
 
     c.execute("CREATE INDEX IF NOT EXISTS idx_plate ON detections(plate)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_ts    ON detections(timestamp)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_cam   ON detections(camera_id)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_matched_plate ON detections(matched_plate)")
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS blacklist (
@@ -214,7 +203,9 @@ def init_db():
         ("dashboard_items", "TEXT DEFAULT 'None Detected'"),
         ("driving_style", "TEXT DEFAULT 'Normal Urban Flow'"),
         ("twin_disambiguation", "TEXT DEFAULT ''"),
-        ("in_cabin_profile", "TEXT DEFAULT '{}'")
+        ("in_cabin_profile", "TEXT DEFAULT '{}'"),
+        ("resolved_plate", "TEXT DEFAULT ''"),
+        ("occlusion_type", "TEXT DEFAULT 'GENUINE_UNPLATED'")
     ]:
         try:
             c.execute(f"ALTER TABLE ghost_profiles ADD COLUMN {col} {col_type}")
@@ -236,6 +227,37 @@ def init_db():
     c.execute("CREATE INDEX IF NOT EXISTS idx_ghost_id ON ghost_sightings(ghost_id)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_ghost_ts ON ghost_sightings(timestamp)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_ghost_prof_ts ON ghost_profiles(last_seen_ts)")
+
+    # Unified Plated Vehicle Biometric & Visual Fingerprints
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS vehicle_fingerprints (
+            plate                   TEXT PRIMARY KEY,
+            vehicle_type            TEXT NOT NULL,
+            body_subtype            TEXT NOT NULL,
+            dominant_color          TEXT NOT NULL,
+            secondary_color         TEXT DEFAULT '',
+            color_hex               TEXT DEFAULT '#64748B',
+            aspect_ratio            REAL DEFAULT 1.0,
+            visual_embedding        TEXT DEFAULT '[]',
+            estimated_make          TEXT DEFAULT '',
+            estimated_model         TEXT DEFAULT '',
+            make_confidence         REAL DEFAULT 0.0,
+            distinguishing_features TEXT DEFAULT '',
+            occupant_count          INTEGER DEFAULT 1,
+            driver_attire           TEXT DEFAULT '',
+            passenger_attire        TEXT DEFAULT '',
+            dashboard_items         TEXT DEFAULT '',
+            driving_style           TEXT DEFAULT '',
+            in_cabin_profile        TEXT DEFAULT '{}',
+            last_seen_ts            TEXT NOT NULL,
+            last_camera             TEXT NOT NULL,
+            best_image_path         TEXT DEFAULT '',
+            total_sightings         INTEGER DEFAULT 1
+        )
+    """)
+    c.execute("CREATE INDEX IF NOT EXISTS idx_fp_make ON vehicle_fingerprints(estimated_make)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_fp_color ON vehicle_fingerprints(dominant_color)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_fp_ts ON vehicle_fingerprints(last_seen_ts)")
 
     for cam in DEFAULT_CAMERAS:
         c.execute("INSERT OR REPLACE INTO cameras (id, name, road, lat, lon, area) VALUES (?,?,?,?,?,?)", cam)
@@ -291,9 +313,44 @@ def init_db():
             WHERE ghost_id = ?
         """, (occ, att, dash, drv, twin, icp, gid))
 
+    # Seed Default Plated Vehicle Fingerprints (for Junction Lead-Vehicle Occlusion Disambiguation)
+    demo_fingerprints = [
+        ("OD02AK1234", "Car", "Sedan", "Silver", "Solid Silver", "#94A3B8", 1.6, "[]", "Hyundai", "Verna", 0.95,
+         "Clean Silver finish, front fog light chrome surround", 1, "Western Corporate: Pique Polo Shirt in Navy Blue", "None",
+         "Lord Ganesha Figurine (Gold) + Centered FASTag", "Steady Arterial Cruise (45 km/h)",
+         '{"total_people_count": 1, "occupants_summary": "1 Person (Solo Driver)", "driver_attire": "Western Corporate: Pique Polo Shirt", "driver_hex": "#1D4ED8", "clothing_category": "Western Corporate & Formal", "dashboard_items": ["Gold Ganesha Figurine", "Centered FASTag RFID Barcode"], "kinematics": {"speed": "45 km/h", "lane": "Center Lane"}}',
+         "2026-09-17T18:00:00", "CAM_PATIA", "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706871/ghost_01_sedan.jpg", 5),
+
+        ("OD02BA9988", "SUV", "SUV", "Black", "Black Grille", "#1E293B", 1.4, "[]", "Mahindra", "Scorpio-N", 0.92,
+         "Twin exhaust tips, black alloy wheels", 2, "Indian Traditional: Kurta (Mens Ethnic Tunic) in White", "Casual Streetwear: Crewneck T-Shirt (Crimson)",
+         "Hanging Wooden Beads on Mirror + Left Transit Slip", "Aggressive Highway Pace (62 km/h Fast Lane)",
+         '{"total_people_count": 2, "occupants_summary": "2 People (Driver + Co-Driver)", "driver_attire": "Indian Traditional: Kurta (White)", "driver_hex": "#F8FAFC", "passenger_attire": "Casual Streetwear: Crewneck T-Shirt (Crimson)", "clothing_category": "Indian Traditional & Ethnic", "dashboard_items": ["Rearview Wooden Mala Beads", "Left Showroom Delivery Permit"]}',
+         "2026-09-17T17:30:00", "CAM_KHANDG", "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706873/ghost_02_suv.jpg", 4),
+
+        ("OD02AZ4567", "Car", "Hatchback", "White", "Solid White", "#F8FAFC", 1.5, "[]", "Maruti", "Swift", 0.89,
+         "Front right bumper scrape mark, rear wiper", 4, "Casual Streetwear: Denim Plaid Shirt & Black Cap", "Indian Traditional: Kurti & Salwar (Festive Yellow)",
+         "Spring Bobblehead Toy on Left Dash + Air Freshener", "Cautious City Commute (36 km/h Stop-and-Go)",
+         '{"total_people_count": 4, "occupants_summary": "4 People (Driver + Co-Driver + 2 Rear)", "driver_attire": "Casual Streetwear: Denim Plaid Shirt", "driver_hex": "#2563EB", "clothing_category": "Multi-Cultural Family Group", "dashboard_items": ["Spring Bobblehead Toy", "Air Freshener Vent Clip"]}',
+         "2026-09-17T18:15:00", "CAM_RASUL", "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706877/ghost_03_hatch.jpg", 6),
+
+        ("OD02R1501", "Motorbike", "Sports", "Red", "Black Decals", "#EF4444", 1.2, "[]", "Yamaha", "R15", 0.96,
+         "Aluminum rear swingarm spools", 1, "Uniform & Protective: Armored Biker Leather Jacket", "Solo Rider",
+         "Handlebar Aluminum Phone Mount & Tank Grips", "High-Speed Dynamic Weaving (58 km/h)",
+         '{"total_people_count": 1, "occupants_summary": "1 Person (Solo Motorcycle Rider)", "driver_attire": "Uniform & Protective: Armored Biker Leather Jacket", "driver_hex": "#0F172A", "clothing_category": "Uniform & Professional Workwear", "dashboard_items": ["Handlebar Aluminum Phone Clamp"]}',
+         "2026-09-17T18:40:00", "CAM_KIIT", "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706880/ghost_04_bike.jpg", 3)
+    ]
+    for fp in demo_fingerprints:
+        c.execute("""
+            INSERT OR REPLACE INTO vehicle_fingerprints
+            (plate, vehicle_type, body_subtype, dominant_color, secondary_color, color_hex, aspect_ratio, visual_embedding,
+             estimated_make, estimated_model, make_confidence, distinguishing_features, occupant_count, driver_attire,
+             passenger_attire, dashboard_items, driving_style, in_cabin_profile, last_seen_ts, last_camera, best_image_path, total_sightings)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, fp)
+
     conn.commit()
     conn.close()
-    print("Database initialised with 46 Bhubaneswar Smart City cameras and suspect profiles:", DB_PATH)
+    print("Database initialised with 46 Bhubaneswar Smart City cameras, suspect profiles, and vehicle fingerprints:", DB_PATH)
 
 
 CAM_FALLBACKS = {
@@ -329,7 +386,8 @@ def insert_detection(plate, camera_id, timestamp, confidence=0.0,
                      speed_kmph=0.0, lat=None, lon=None,
                      direction="", vehicle_type="unknown", image_path="", voting_data="",
                      env_condition="NORMAL", quality_score=0.85,
-                     plate_color="WHITE", category="Private Vehicle", violation="NONE"):
+                     plate_color="WHITE", category="Private Vehicle", violation="NONE",
+                     occlusion_status="NONE", occlusion_reason="", matched_plate="", vehicle_profile="{}"):
     # Ensure coordinates are set from camera metadata if not provided
     cam_meta = CAM_FALLBACKS.get(camera_id, {})
     if lat is None:
@@ -340,9 +398,9 @@ def insert_detection(plate, camera_id, timestamp, confidence=0.0,
     conn = get_conn()
     conn.execute("""
         INSERT INTO detections
-            (plate, camera_id, timestamp, confidence, speed_kmph, lat, lon, direction, vehicle_type, image_path, voting_data, env_condition, quality_score, plate_color, category, violation)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    """, (plate, camera_id, timestamp, confidence, speed_kmph, lat, lon, direction, vehicle_type, image_path, voting_data, env_condition, quality_score, plate_color, category, violation))
+            (plate, camera_id, timestamp, confidence, speed_kmph, lat, lon, direction, vehicle_type, image_path, voting_data, env_condition, quality_score, plate_color, category, violation, occlusion_status, occlusion_reason, matched_plate, vehicle_profile)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (plate, camera_id, timestamp, confidence, speed_kmph, lat, lon, direction, vehicle_type, image_path, voting_data, env_condition, quality_score, plate_color, category, violation, occlusion_status, occlusion_reason, matched_plate, vehicle_profile))
     conn.commit(); conn.close()
 
     # Automatically stream to Central Firebase Cloud Database (No local saves requirement)
@@ -365,9 +423,9 @@ def get_trajectory(plate):
         SELECT d.*, c.name as camera_name, c.road, c.area, c.lat as cam_lat, c.lon as cam_lon
         FROM detections d
         LEFT JOIN cameras c ON c.id = d.camera_id
-        WHERE d.plate = ?
+        WHERE d.plate = ? OR d.matched_plate = ?
         ORDER BY d.timestamp ASC
-    """, (clean_p,)).fetchall()
+    """, (clean_p, clean_p)).fetchall()
     conn.close()
 
     results = []
@@ -783,6 +841,117 @@ def get_ghost_trajectory(ghost_id):
         WHERE s.ghost_id = ?
         ORDER BY s.timestamp ASC
     """, (ghost_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# --- Plated Vehicle Biometric & Visual Fingerprint helpers ---
+
+def upsert_vehicle_fingerprint(plate, vehicle_type, body_subtype, dominant_color,
+                               secondary_color="", color_hex="#64748B", aspect_ratio=1.0,
+                               visual_embedding="[]", estimated_make="", estimated_model="",
+                               make_confidence=0.0, distinguishing_features="", occupant_count=1,
+                               driver_attire="", passenger_attire="", dashboard_items="",
+                               driving_style="", in_cabin_profile="{}", last_seen_ts="",
+                               last_camera="", best_image_path=""):
+    """
+    Saves or updates the rich visual fingerprint for a plated vehicle so it can be cross-matched
+    when occluded behind other vehicles in future junction traffic.
+    """
+    clean_p = plate.upper().replace(" ", "")
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO vehicle_fingerprints
+            (plate, vehicle_type, body_subtype, dominant_color, secondary_color, color_hex,
+             aspect_ratio, visual_embedding, estimated_make, estimated_model, make_confidence,
+             distinguishing_features, occupant_count, driver_attire, passenger_attire,
+             dashboard_items, driving_style, in_cabin_profile, last_seen_ts, last_camera,
+             best_image_path, total_sightings)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+        ON CONFLICT(plate) DO UPDATE SET
+            vehicle_type = CASE WHEN excluded.vehicle_type != '' THEN excluded.vehicle_type ELSE vehicle_fingerprints.vehicle_type END,
+            body_subtype = CASE WHEN excluded.body_subtype != '' THEN excluded.body_subtype ELSE vehicle_fingerprints.body_subtype END,
+            dominant_color = CASE WHEN excluded.dominant_color != '' THEN excluded.dominant_color ELSE vehicle_fingerprints.dominant_color END,
+            color_hex = CASE WHEN excluded.color_hex != '#64748B' THEN excluded.color_hex ELSE vehicle_fingerprints.color_hex END,
+            visual_embedding = CASE WHEN excluded.visual_embedding != '[]' THEN excluded.visual_embedding ELSE vehicle_fingerprints.visual_embedding END,
+            estimated_make = CASE WHEN excluded.estimated_make != '' THEN excluded.estimated_make ELSE vehicle_fingerprints.estimated_make END,
+            estimated_model = CASE WHEN excluded.estimated_model != '' THEN excluded.estimated_model ELSE vehicle_fingerprints.estimated_model END,
+            distinguishing_features = CASE WHEN excluded.distinguishing_features != '' THEN excluded.distinguishing_features ELSE vehicle_fingerprints.distinguishing_features END,
+            occupant_count = CASE WHEN excluded.occupant_count > 0 THEN excluded.occupant_count ELSE vehicle_fingerprints.occupant_count END,
+            driver_attire = CASE WHEN excluded.driver_attire != '' THEN excluded.driver_attire ELSE vehicle_fingerprints.driver_attire END,
+            passenger_attire = CASE WHEN excluded.passenger_attire != '' THEN excluded.passenger_attire ELSE vehicle_fingerprints.passenger_attire END,
+            dashboard_items = CASE WHEN excluded.dashboard_items != '' THEN excluded.dashboard_items ELSE vehicle_fingerprints.dashboard_items END,
+            in_cabin_profile = CASE WHEN excluded.in_cabin_profile != '{}' THEN excluded.in_cabin_profile ELSE vehicle_fingerprints.in_cabin_profile END,
+            last_seen_ts = excluded.last_seen_ts,
+            last_camera = excluded.last_camera,
+            best_image_path = CASE WHEN excluded.best_image_path != '' THEN excluded.best_image_path ELSE vehicle_fingerprints.best_image_path END,
+            total_sightings = vehicle_fingerprints.total_sightings + 1
+    """, (clean_p, vehicle_type, body_subtype, dominant_color, secondary_color, color_hex,
+          aspect_ratio, visual_embedding, estimated_make, estimated_model, make_confidence,
+          distinguishing_features, occupant_count, driver_attire, passenger_attire,
+          dashboard_items, driving_style, in_cabin_profile, last_seen_ts, last_camera, best_image_path))
+    conn.commit(); conn.close()
+
+
+def get_vehicle_fingerprint(plate):
+    clean_p = plate.upper().replace(" ", "")
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM vehicle_fingerprints WHERE plate=?", (clean_p,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_active_plated_fingerprints(limit=50):
+    """Retrieves recent plated vehicle fingerprints across the surveillance grid."""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT * FROM vehicle_fingerprints
+        ORDER BY last_seen_ts DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def resolve_ghost_to_plated(ghost_id, plate, reason=""):
+    """
+    Bi-directional reconciliation: If a vehicle was tracked earlier as an unplated ghost
+    and its plate is later captured cleanly, fuses prior ghost sightings into the real plate.
+    """
+    clean_p = plate.upper().replace(" ", "")
+    conn = get_conn()
+    conn.execute("""
+        UPDATE ghost_profiles
+        SET status = 'RESOLVED_TO_PLATED',
+            resolved_plate = ?,
+            twin_disambiguation = CASE WHEN ? != '' THEN ? ELSE twin_disambiguation END
+        WHERE ghost_id = ?
+    """, (clean_p, reason, reason, ghost_id))
+
+    # Link earlier ghost sightings to the plate's detections history
+    sightings = conn.execute("SELECT * FROM ghost_sightings WHERE ghost_id = ?", (ghost_id,)).fetchall()
+    for s in sightings:
+        conn.execute("""
+            INSERT OR IGNORE INTO detections
+            (plate, camera_id, timestamp, confidence, speed_kmph, vehicle_type, image_path, occlusion_status, occlusion_reason, matched_plate)
+            VALUES (?, ?, ?, ?, ?, 'Car', ?, 'RETROACTIVE_GHOST_FUSION', 'Retroactively resolved from unplated ghost sighting after plate confirmation', ?)
+        """, (clean_p, s["camera_id"], s["timestamp"], s["match_score"], s["speed_kmph"], s["image_path"], clean_p))
+
+    conn.commit(); conn.close()
+    return True
+
+
+def get_all_occluded_resolutions(limit=50):
+    """Fetches all junction sightings where lead-vehicle bumper occlusion was disambiguated."""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT d.*, c.name as camera_name, c.road, c.area
+        FROM detections d
+        LEFT JOIN cameras c ON d.camera_id = c.id
+        WHERE d.occlusion_status != 'NONE' OR d.matched_plate != ''
+        ORDER BY d.timestamp DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

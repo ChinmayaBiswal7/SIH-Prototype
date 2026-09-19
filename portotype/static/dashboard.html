@@ -583,8 +583,10 @@ async function rLive(){
           'GREY': '<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:4px;font-size:.68rem;font-weight:700;">⚠️ NO / COVERED PLATE</span>'
         };
         const catBadge = colorBadges[pColor] || `<span style="color:#94a3b8;font-size:.78rem">${pCat}</span>`;
-        return `<tr onclick="tft('${x.plate}')">
-          <td><span class="plate-pill">${x.plate}</span></td>
+        const isOccluded = x.occlusion_status === 'OCCLUDED_BEHIND_LEAD_VEHICLE';
+        const occBadge = isOccluded ? `<div style="margin-top:2px"><span style="background:#0284c722;color:#38bdf8;border:1px solid #0284c7;padding:1px 5px;border-radius:4px;font-size:.62rem;font-weight:700" title="${x.occlusion_reason||'Plate occluded behind lead vehicle'}">🛡️ Occluded &middot; Matched</span></div>` : '';
+        return `<tr onclick="tft('${x.matched_plate || x.plate}')">
+          <td><span class="plate-pill">${x.plate}</span>${occBadge}</td>
           <td>${x.image_path?`<img src="${x.image_path}" style="height:24px;width:70px;object-fit:cover;border-radius:3px;border:1px solid #334155" onclick="event.stopPropagation();openEvidenceModal('${x.image_path}','${x.plate}','${x.camera_id}','${x.road||x.camera_name||''}','${fdt(x.timestamp)}','${x.speed_kmph||0} km/h','${pct(x.confidence)}')"/>`:'--'}</td>
           <td style="font-weight:600">${x.camera_id}</td>
           <td style="color:#94a3b8">${x.road||x.camera_name||'--'}</td>
@@ -733,6 +735,14 @@ async function doTrack(targetPlateParam){
         ${e.confidence?'conf '+pct(e.confidence):''}
         ${i>0&&e.travel_minutes?'<span class="tgap">+'+e.travel_minutes+'m</span>':''}
       </div>
+      ${e.occlusion_status === 'OCCLUDED_BEHIND_LEAD_VEHICLE' ? `
+        <div style="margin-top:4px;background:#0369a122;border-left:2px solid #38bdf8;padding:3px 6px;border-radius:3px;font-size:.66rem;color:#7dd3fc">
+          🛡️ <b>Junction Occlusion Milestone:</b> Front bumper occluded behind lead vehicle. Re-identified via In-Cabin Attire &amp; Dashboard DNA.
+        </div>` : ''}
+      ${e.occlusion_status === 'RETROACTIVE_GHOST_FUSION' ? `
+        <div style="margin-top:4px;background:#065f4622;border-left:2px solid #10b981;padding:3px 6px;border-radius:3px;font-size:.66rem;color:#a7f3d0">
+          ✓ <b>Prior Unplated Sighting:</b> Fused retroactively after plate confirmed downstream.
+        </div>` : ''}
       ${e.image_path?`<img src="${e.image_path}" class="snap-thumb" title="Click to view full camera snapshot" onclick="event.stopPropagation();openEvidenceModal('${e.image_path}','${data.plate}','${e.camera_id}','${e.camera_name||''}','${fdt(e.timestamp)}','${e.speed_kmph||0} km/h','${pct(e.confidence)}')"/>`:''}
     </div>`).join('');
 
@@ -855,7 +865,6 @@ async function doTrack(targetPlateParam){
   // 3. Asynchronously snap to road network in background (DO NOT AWAIT - zero UI blocking!)
   drawRoadRoute(pts);
 }
-
 
 function focusCamera(lat,lon){
   if(!lmap||!lat||!lon)return;
@@ -992,16 +1001,28 @@ async function rGhosts(){
               <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${hex};border:1px solid #ffffff88;box-shadow:0 0 6px ${hex};flex-shrink:0"></span>
               <b style="color:#f472b6;font-family:monospace;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.ghost_id}</b>
             </div>
-            <span style="background:#831843;color:#fce7f3;padding:1px 7px;border-radius:10px;font-size:.62rem;font-weight:700;flex-shrink:0;white-space:nowrap">
-              ${sightings > 1 ? '📌 ' + sightings + ' Sightings' : 'Single'}
-            </span>
+            ${(g.status === 'RESOLVED_TO_PLATED' || g.resolved_plate) ? `
+              <span style="background:#065f46;color:#a7f3d0;padding:1px 7px;border-radius:10px;font-size:.62rem;font-weight:700;flex-shrink:0;white-space:nowrap">
+                ✓ Resolved: ${g.resolved_plate}
+              </span>
+            ` : `
+              <span style="background:#831843;color:#fce7f3;padding:1px 7px;border-radius:10px;font-size:.62rem;font-weight:700;flex-shrink:0;white-space:nowrap">
+                ${sightings > 1 ? '📌 ' + sightings + ' Sightings' : 'Single'}
+              </span>
+            `}
           </div>
 
           <div style="position:relative;height:90px;background:#0f172a;border-radius:6px;overflow:hidden;border:1px solid #334155;margin-bottom:8px;cursor:pointer" onclick="openEvidenceModal('${imgUrl}','${g.ghost_id}','${g.last_camera}','${subtype}','${lastSeen}','0 km/h','N/A')">
             <img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.src='/api/snapshot/test_cctv.jpg'"/>
-            <div style="position:absolute;bottom:3px;left:5px;background:rgba(0,0,0,0.78);color:#f472b6;font-size:.6rem;padding:2px 5px;border-radius:3px">
-              ⚠️ NO PLATE
-            </div>
+            ${(g.status === 'RESOLVED_TO_PLATED' || g.resolved_plate) ? `
+              <div style="position:absolute;bottom:3px;left:5px;background:rgba(6,95,70,0.92);color:#a7f3d0;font-size:.6rem;padding:2px 5px;border-radius:3px;font-weight:700">
+                ✓ RESOLVED TO ${g.resolved_plate}
+              </div>
+            ` : `
+              <div style="position:absolute;bottom:3px;left:5px;background:rgba(0,0,0,0.78);color:#f472b6;font-size:.6rem;padding:2px 5px;border-radius:3px">
+                ⚠️ NO PLATE
+              </div>
+            `}
           </div>
 
           <div style="font-size:.72rem;color:#cbd5e1;line-height:1.55;margin-bottom:10px;background:#0f172a;padding:7px 9px;border-radius:6px;border:1px solid #334155">
@@ -1010,8 +1031,7 @@ async function rGhosts(){
             <div><span style="color:#64748b">Route:</span> <span style="color:#38bdf8">${g.first_camera}</span> &rarr; <span style="color:#22c55e">${g.last_camera}</span></div>
             <div><span style="color:#64748b">Last:</span> ${lastSeen}</div>
             <div style="margin-top:5px;padding-top:5px;border-top:1px dashed #334155;display:flex;flex-direction:column;gap:2px;font-size:.69rem">
-              <div><span style="color:#818cf8">👥 People Inside:</span> <b style="color:#38bdf8">${g.occupant_count > 1 ? g.occupant_count + ' People (' + (g.occupant_count===2 ? 'Driver + 1 Passenger' : 'Driver + ' + (g.occupant_count-1) + ' Passengers') + ')' : '1 Person (Solo Driver)'}</b></div>
-              <div><span style="color:#94a3b8">👔 Driver Dress:</span> <b style="color:#cbd5e1">${g.driver_attire ? g.driver_attire.split('(')[0].trim() : 'Dark Attire'}</b></div>
+              <div><span style="color:#818cf8">👤 Cabin:</span> <b style="color:#e2e8f0">${(g.occupant_count > 1 ? g.occupant_count + ' Occupants' : 'Solo Driver') + (g.driver_attire ? ' &middot; ' + g.driver_attire.split('(')[0].trim() : '')}</b></div>
               <div><span style="color:#fde68a">🧸 Dash:</span> <b style="color:#fde68a">${g.dashboard_items ? g.dashboard_items.split('+')[0].trim() : 'Clean Dash'}</b></div>
             </div>
           </div>
@@ -1160,6 +1180,19 @@ async function openGhostInspectModal(ghostId){
     ];
 
     body.innerHTML = `
+      ${(p.status === 'RESOLVED_TO_PLATED' || p.resolved_plate) ? `
+        <div style="background:#064e3b33;border:1px solid #059669;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="color:#6ee7b7;font-weight:800;font-size:.86rem">🎉 Lead-Vehicle Queue Occlusion Reconciled!</div>
+            <div style="color:#cbd5e1;font-size:.73rem;margin-top:2px">
+              Front bumper was occluded behind lead vehicle in traffic. Confirmed as real vehicle: <b style="color:#38bdf8;font-size:.82rem">${p.resolved_plate}</b>.
+            </div>
+          </div>
+          <button class="btn-sm green" style="padding:6px 14px;font-size:.74rem;background:#10b981;font-weight:700;cursor:pointer;border:none;border-radius:5px;color:#0f172a" onclick="closeGhostInspectModal();tft('${p.resolved_plate}')">
+            Open Journey Trajectory &rarr;
+          </button>
+        </div>
+      ` : ''}
       <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:18px;">
         <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">

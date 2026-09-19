@@ -454,6 +454,9 @@ def extract_vehicle_profile(crop_img, vehicle_type="Car", speed_kmph=0.0):
     # 6. In-Cabin & Windshield Deep Disambiguation (Anti-Clone / Anti-Twin Engine)
     cabin_profile = extract_in_cabin_profile(crop_img, vehicle_type, subtype, speed_kmph)
 
+    # 7. Lead Vehicle Bumper Occlusion Detection
+    is_lead_occluded, occlusion_reason = check_lead_vehicle_occlusion(crop_img, aspect_ratio)
+
     summary = f"{make_model['make']} {make_model['model']} in {clean_dom} ({sec_color_desc})"
 
     return {
@@ -480,11 +483,35 @@ def extract_vehicle_profile(crop_img, vehicle_type="Car", speed_kmph=0.0):
         "driver_attire_hex": cabin_profile["driver_attire_hex"],
         "passenger_attire": cabin_profile["passenger_attire"],
         "dashboard_items": cabin_profile["dashboard_items"],
-        "dashboard_confidence": cabin_profile["dashboard_confidence"],
         "driving_style": cabin_profile["driving_style"],
         "twin_disambiguation": cabin_profile["twin_disambiguation"],
-        "in_cabin_profile": cabin_profile
+        "in_cabin_profile": cabin_profile,
+        "is_lead_occluded": is_lead_occluded,
+        "occlusion_reason": occlusion_reason
     }
+
+
+def check_lead_vehicle_occlusion(crop_img, aspect_ratio):
+    """
+    Evaluates whether the lower bumper / license plate region is occluded by a lead vehicle,
+    queueing congestion, or tailgate proximity.
+    """
+    if crop_img is None or crop_img.size == 0:
+        return False, "Clear view"
+    
+    h, w = crop_img.shape[:2]
+    # Check lower 20% where front bumper and plate reside
+    lower_bumper_roi = crop_img[int(h * 0.80):h, :]
+    if lower_bumper_roi.size == 0:
+        return False, "Clear view"
+
+    gray_bumper = cv2.cvtColor(lower_bumper_roi, cv2.COLOR_BGR2GRAY)
+    bumper_var = float(np.var(gray_bumper))
+    mean_val = float(np.mean(gray_bumper))
+
+    is_occluded = bumper_var < 180.0 or mean_val < 35.0
+    reason = "Bumper/plate region occluded behind lead vehicle in junction queue" if is_occluded else "Clear view"
+    return is_occluded, reason
 
 
 

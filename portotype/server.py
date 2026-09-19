@@ -185,6 +185,21 @@ def track_ghost(ghost_id):
     })
 
 
+# -----------------------------------------------------------------------
+# Junction Occlusion & Unified Vehicle Fingerprints Endpoints
+# -----------------------------------------------------------------------
+@app.route("/api/occluded-resolutions")
+def get_occluded_resolutions():
+    limit = int(request.args.get("limit", 50))
+    records = db.get_all_occluded_resolutions(limit=limit)
+    return jsonify(records)
+
+
+@app.route("/api/fingerprints")
+def get_fingerprints():
+    limit = int(request.args.get("limit", 50))
+    fps = db.get_active_plated_fingerprints(limit=limit)
+    return jsonify(fps)
 
 
 # -----------------------------------------------------------------------
@@ -606,30 +621,11 @@ def upload_and_process_anpr():
         p_cat = p.get("category", "Private Vehicle")
         p_viol = p.get("violation", "NONE")
 
-        # Unplated Vehicle Profiling & Re-ID for Plate-Less / Covered Plate Vehicles
-        ghost_info = None
-        if p_viol == "MISSING_OR_COVERED_PLATE" or "NO PLATE" in plate or "UNREADABLE" in plate:
-            v_prof = p.get("vehicle_profile") or vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=p.get("vehicle_type", "Car"))
-            if v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
-                p["vehicle_type"] = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
-            ghost_info = vehicle_reid.match_or_create_ghost(
-                v_prof,
-                camera_id="CAM_LIVE",
-                timestamp=timestamp,
-                image_path="",
-                speed_kmph=0.0
-            )
-            plate = f"{ghost_info['ghost_id']} (NO PLATE)"
-            p["plate"] = plate
-        else:
-            if not p.get("vehicle_profile"):
-                try:
-                    p_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=p.get("vehicle_type", "Car"))
-                    p["vehicle_profile"] = p_prof
-                    if (not p.get("vehicle_type") or p["vehicle_type"].upper() in ["CAR", "MOTOR CAR", "AUTOMOBILE"]) and p_prof and p_prof.get("estimated_make"):
-                        p["vehicle_type"] = f"{p_prof['estimated_make']} {p_prof['estimated_model']}"
-                except Exception:
-                    pass
+        # Extract Full Vehicle Fingerprint for ALL vehicles (Plated & Unplated)
+        v_prof = p.get("vehicle_profile") or vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=p.get("vehicle_type", "Car"))
+        p["vehicle_profile"] = v_prof
+        if (not p.get("vehicle_type") or p["vehicle_type"].upper() in ["CAR", "MOTOR CAR", "AUTOMOBILE"]) and v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
+            p["vehicle_type"] = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
 
         # Safe filename without illegal Windows characters or slashes
         safe_plate = re.sub(r'[^\w\-]', '_', plate).strip('_')
@@ -638,8 +634,40 @@ def upload_and_process_anpr():
         cv2.imwrite(snap_path, annotated)
         snap_url = f"/api/snapshot/{snap_name}"
 
-        if ghost_info:
-            ghost_info["image_path"] = snap_url
+        # Unified Junction Disambiguation & Re-ID Router
+        is_plate_missing = (p_viol == "MISSING_OR_COVERED_PLATE" or "NO PLATE" in plate or "UNREADABLE" in plate)
+        ghost_info = None
+        matched_plate = ""
+        occlusion_status = "NONE"
+        occlusion_reason = ""
+
+        reid_result = vehicle_reid.match_or_resolve_vehicle(
+            profile=v_prof,
+            camera_id="CAM_LIVE",
+            timestamp=timestamp,
+            image_path=snap_url,
+            speed_kmph=0.0,
+            is_plate_visible=not is_plate_missing,
+            raw_plate=None if is_plate_missing else plate
+        )
+
+        if reid_result.get("status") == "OCCLUDED_PLATED_MATCH":
+            # Successfully resolved to a known plated vehicle behind a lead car!
+            matched_plate = reid_result["plate"]
+            plate = f"{matched_plate} [Plate Occluded]"
+            p["plate"] = plate
+            p_viol = "NONE"  # Suppress false missing plate felony
+            occlusion_status = reid_result.get("occlusion_status", "OCCLUDED_BEHIND_LEAD_VEHICLE")
+            occlusion_reason = reid_result.get("occlusion_reason", "")
+            p["occlusion_info"] = reid_result
+        elif is_plate_missing:
+            ghost_info = reid_result
+            plate = f"{reid_result.get('ghost_id', 'UNPLATED')} (NO PLATE)"
+            p["plate"] = plate
+            occlusion_status = "GENUINE_UNPLATED"
+            p["ghost_info"] = ghost_info
+            if ghost_info:
+                ghost_info["image_path"] = snap_url
 
         v_info = p.get("voting_details", {})
         v_data_str = json.dumps(v_info)
@@ -648,18 +676,23 @@ def upload_and_process_anpr():
         q_score = telemetry.get("overall_quality_score", 0.85)
 
         db.insert_detection(
-            plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
+            plate=matched_plate if matched_plate else plate,
+            camera_id="CAM_LIVE", timestamp=timestamp,
             confidence=p["confidence"], speed_kmph=0.0,
             vehicle_type=p["vehicle_type"], image_path=snap_url, voting_data=v_data_str,
             env_condition=env_cond, quality_score=q_score,
-            plate_color=p_color, category=p_cat, violation=p_viol
+            plate_color=p_color, category=p_cat, violation=p_viol,
+            occlusion_status=occlusion_status, occlusion_reason=occlusion_reason,
+            matched_plate=matched_plate, vehicle_profile=json.dumps(v_prof)
         )
-        al.check_detection(plate, "CAM_LIVE", timestamp)
+        if p_viol != "NONE":
+            al.check_detection(plate, "CAM_LIVE", timestamp)
 
         # Real-time Cloud Sync to Firebase (for Mobile Apps / Traffic Police / Ambulance)
         try:
             firebase_sync.push_detection(
-                plate=plate, camera_id="CAM_LIVE", timestamp=timestamp,
+                plate=matched_plate if matched_plate else plate,
+                camera_id="CAM_LIVE", timestamp=timestamp,
                 confidence=p["confidence"], speed_kmph=0.0,
                 vehicle_type=p["vehicle_type"], image_path=snap_url,
                 plate_color=p_color, category=p_cat, violation=p_viol
@@ -686,7 +719,12 @@ def upload_and_process_anpr():
             "category": p_cat,
             "violation": p_viol,
             "ghost_info": ghost_info,
-            "vehicle_profile": p.get("vehicle_profile") or (ghost_info.get("profile") if ghost_info else None)
+            "vehicle_profile": v_prof,
+            "occlusion_status": occlusion_status,
+            "occlusion_reason": occlusion_reason,
+            "matched_plate": matched_plate,
+            "is_occluded": (occlusion_status != "NONE"),
+            "reid_result": reid_result
         }
 
 
@@ -834,32 +872,58 @@ def _process_video_background(job_id, temp_vpath, timestamp):
                         p_cat = p.get("category", "Private Vehicle")
                         p_viol = p.get("violation", "NONE")
 
-                        # Ghost Vehicle Profiling & Re-ID for Plate-Less / Covered Plate Vehicles
+                        # Unified Vehicle Fingerprinting for Video detections
+                        v_prof = p.get("vehicle_profile") or vehicle_profiler.extract_vehicle_profile(None, vehicle_type=p.get("vehicle_type", "Car"))
+                        p["vehicle_profile"] = v_prof
+
+                        is_plate_missing = (p_viol == "MISSING_OR_COVERED_PLATE" or "NO PLATE" in plate or "UNREADABLE" in plate)
                         ghost_info = None
-                        if p_viol == "MISSING_OR_COVERED_PLATE" or "NO PLATE" in plate or "UNREADABLE" in plate:
-                            v_prof = p.get("vehicle_profile") or vehicle_profiler.extract_vehicle_profile(None, vehicle_type=p.get("vehicle_type", "Car"))
-                            ghost_info = vehicle_reid.match_or_create_ghost(
-                                v_prof,
-                                camera_id="CAM_CCTV_STREAM",
-                                timestamp=timestamp,
-                                image_path=snap_url,
-                                speed_kmph=45.0
-                            )
-                            plate = f"{ghost_info['ghost_id']} (NO PLATE)"
+                        matched_plate = ""
+                        occlusion_status = "NONE"
+                        occlusion_reason = ""
+
+                        reid_result = vehicle_reid.match_or_resolve_vehicle(
+                            profile=v_prof,
+                            camera_id="CAM_CCTV_STREAM",
+                            timestamp=timestamp,
+                            image_path=snap_url,
+                            speed_kmph=45.0,
+                            is_plate_visible=not is_plate_missing,
+                            raw_plate=None if is_plate_missing else plate
+                        )
+
+                        if reid_result.get("status") == "OCCLUDED_PLATED_MATCH":
+                            matched_plate = reid_result["plate"]
+                            plate = f"{matched_plate} [Plate Occluded]"
                             p["plate"] = plate
+                            p_viol = "NONE" # Suppress false missing plate alert
+                            occlusion_status = reid_result.get("occlusion_status", "OCCLUDED_BEHIND_LEAD_VEHICLE")
+                            occlusion_reason = reid_result.get("occlusion_reason", "")
+                            p["occlusion_info"] = reid_result
+                        elif is_plate_missing:
+                            ghost_info = reid_result
+                            plate = f"{reid_result.get('ghost_id', 'UNPLATED')} (NO PLATE)"
+                            p["plate"] = plate
+                            occlusion_status = "GENUINE_UNPLATED"
+                            p["ghost_info"] = ghost_info
 
                         db.insert_detection(
-                            plate=plate, camera_id="CAM_CCTV_STREAM", timestamp=timestamp,
+                            plate=matched_plate if matched_plate else plate,
+                            camera_id="CAM_CCTV_STREAM", timestamp=timestamp,
                             confidence=conf, speed_kmph=45.0,
                             vehicle_type=p["vehicle_type"], image_path=snap_url,
                             voting_data=v_data_str, env_condition=env_cond, quality_score=q_score,
-                            plate_color=p_color, category=p_cat, violation=p_viol
+                            plate_color=p_color, category=p_cat, violation=p_viol,
+                            occlusion_status=occlusion_status, occlusion_reason=occlusion_reason,
+                            matched_plate=matched_plate, vehicle_profile=json.dumps(v_prof)
                         )
-                        al.check_detection(plate, "CAM_CCTV_STREAM", timestamp)
+                        if p_viol != "NONE":
+                            al.check_detection(plate, "CAM_CCTV_STREAM", timestamp)
 
                         try:
                             firebase_sync.push_detection(
-                                plate=plate, camera_id="CAM_CCTV_STREAM", timestamp=timestamp,
+                                plate=matched_plate if matched_plate else plate,
+                                camera_id="CAM_CCTV_STREAM", timestamp=timestamp,
                                 confidence=conf, speed_kmph=45.0,
                                 vehicle_type=p["vehicle_type"], image_path=snap_url,
                                 plate_color=p_color, category=p_cat, violation=p_viol
@@ -877,7 +941,12 @@ def _process_video_background(job_id, temp_vpath, timestamp):
                             "environmental_condition": env_cond, "quality_score": q_score, "telemetry": telemetry,
                             "plate_color": p_color, "category": p_cat, "violation": p_viol,
                             "ghost_info": ghost_info,
-                            "vehicle_profile": p.get("vehicle_profile") or (ghost_info.get("profile") if ghost_info else None)
+                            "vehicle_profile": v_prof,
+                            "occlusion_status": occlusion_status,
+                            "occlusion_reason": occlusion_reason,
+                            "matched_plate": matched_plate,
+                            "is_occluded": (occlusion_status != "NONE"),
+                            "reid_result": reid_result
                         }
                         out_records.append(rec)
                         with _cam_lock:

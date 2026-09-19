@@ -34,6 +34,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const p = params.get("portal");
     if (p === "traffic" || p === "tracking") return p;
+    if (params.get("track")) return "tracking";
     return null; // Show PortalSelector by default after login
   });
   const [view, setView] = useState("overview");

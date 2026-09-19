@@ -160,19 +160,6 @@ export default function CityFlowView({
               );
             })}
           </div>
-
-          {/* Informational Footer explaining deployment */}
-          <div className="cf-deployment-callout">
-            <div className="cf-dc-icon">
-              <i className="fas fa-globe" />
-            </div>
-            <div className="cf-dc-content">
-              <strong>Production Deployment Note:</strong>
-              <span>
-                When deployed online (e.g. on Render, Railway, Docker, or AWS), the Python backend runs automatically 24/7 as an always-on cloud service — you will never have to start the server manually. For local development, simply run <code>start.bat</code> to launch everything in 1 click!
-              </span>
-            </div>
-          </div>
         </div>
       )}
     </div>

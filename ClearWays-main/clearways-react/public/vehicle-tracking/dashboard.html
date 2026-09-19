@@ -469,7 +469,9 @@ const CAM_COORDS = {
   'CAM_06': { lat: 20.2546, lon: 85.8437, name: 'Kalpana Square', road: 'Cuttack-Puri Road' },
   'CAM_07': { lat: 20.2470, lon: 85.8415, name: 'Ravi Talkies Square', road: 'Puri Trunk Road' },
   'CAM_08': { lat: 20.2575, lon: 85.7865, name: 'Khandagiri Square', road: 'NH-16' },
-  'CAM_LIVE': { lat: 20.2640, lon: 85.8354, name: 'Live CCTV Edge Node', road: 'Station Road' }
+  'CAM_LIVE': { lat: 20.2640, lon: 85.8354, name: 'Live ANPR Checkpoint (Station Road)', road: 'Station Road' },
+  'CAM_WEBCAM': { lat: 20.3530, lon: 85.8180, name: 'Live CCTV Edge Node (Patia Corridor)', road: 'Nandankanan Road' },
+  'CAM_CCTV_STREAM': { lat: 20.3005, lon: 85.8228, name: 'CCTV Video Stream (Jayadev Vihar)', road: 'NH-16' }
 };
 
 function initMap(){
@@ -688,15 +690,24 @@ async function drawRoadRoute(pts){
   }
 }
 
-async function doTrack(){
+async function doTrack(targetPlateParam){
   document.getElementById('sug').style.display='none';
-  const plate=document.getElementById('pin').value.trim().toUpperCase();
+  const pinInput = document.getElementById('pin');
+  if(targetPlateParam) pinInput.value = targetPlateParam;
+  const plate=pinInput.value.trim().toUpperCase();
   if(!plate)return;
-  const data=await fetch(API+'/api/track/'+encodeURIComponent(plate)).then(r=>r.json());
-  const traj=data.trajectory||[];
-  
+
   document.getElementById('j-card').style.display='flex';
   initMap();
+
+  let data;
+  try {
+    data=await fetch(API+'/api/track/'+encodeURIComponent(plate)).then(r=>r.json());
+  } catch(e) {
+    console.error("Track fetch error:", e);
+    return;
+  }
+  const traj=data.trajectory||[];
 
   const f=traj[0],l=traj[traj.length-1];
   document.getElementById('j-sum').innerHTML=`
@@ -747,8 +758,6 @@ async function doTrack(){
 
   if(!pts.length)return;
 
-  await drawRoadRoute(pts);
-
   // Deduplicate points into unique camera locations to prevent DOM lag (max 1 marker per camera)
   const uniqueCamsMap = new Map();
   pts.forEach((e, i) => {
@@ -783,6 +792,7 @@ async function doTrack(){
 
   const uniqueCamsList = Array.from(uniqueCamsMap.values());
 
+  // 1. Render all camera markers and badges immediately (0ms delay)
   uniqueCamsList.forEach((item, idx) => {
     const isF = item.first_idx === 0;
     const isL = item.last_idx === pts.length - 1;
@@ -809,7 +819,7 @@ async function doTrack(){
 
     const m = L.marker([item.lat, item.lon], { icon }).addTo(mLayer).bindPopup(popup);
 
-    const label = uniqueCamsList.length === 1 ? 'SEEN' : (isF ? 'START' : (isL ? 'CURRENT / LAST' : `STOP ${idx + 1}`));
+    const label = uniqueCamsList.length === 1 ? 'ACTIVE SIGHTING' : (isF ? 'START' : (isL ? 'CURRENT / LAST' : `STOP ${idx + 1}`));
     m.bindTooltip(`<span style="font-size:11px;font-weight:700;background:#0f172a;color:${col};border:1px solid ${col};padding:2px 7px;border-radius:4px">${label}: ${item.cam_id}</span>`, {
       permanent: true,
       direction: 'top',
@@ -819,8 +829,32 @@ async function doTrack(){
 
     if (uniqueCamsList.length === 1 || isL) m.openPopup();
   });
-}
 
+  // 2. Render direct route line immediately so map is never blank
+  if (uniqueCamsList.length >= 2) {
+    const directLatLngs = uniqueCamsList.map(e => [e.lat, e.lon]);
+    if(rGlowLayer) { lmap.removeLayer(rGlowLayer); rGlowLayer = null; }
+    if(rLayer) { lmap.removeLayer(rLayer); rLayer = null; }
+
+    rGlowLayer = L.polyline(directLatLngs, { color: '#0284c7', weight: 8, opacity: 0.4 }).addTo(mLayer);
+    rLayer = L.polyline(directLatLngs, { color: '#38bdf8', weight: 4, opacity: 0.95, dashArray: '6,6' }).addTo(mLayer);
+    lmap.fitBounds(rLayer.getBounds(), { padding: [60, 60], maxZoom: 15 });
+  } else if (uniqueCamsList.length === 1) {
+    // Single camera sighting -> draw 650m active surveillance radar perimeter circle
+    L.circle([uniqueCamsList[0].lat, uniqueCamsList[0].lon], {
+      radius: 650,
+      color: '#38bdf8',
+      weight: 2,
+      dashArray: '5,5',
+      fillColor: '#0284c7',
+      fillOpacity: 0.15
+    }).addTo(mLayer);
+    lmap.setView([uniqueCamsList[0].lat, uniqueCamsList[0].lon], 15);
+  }
+
+  // 3. Asynchronously snap to road network in background (DO NOT AWAIT - zero UI blocking!)
+  drawRoadRoute(pts);
+}
 
 function focusCamera(lat,lon){
   if(!lmap||!lat||!lon)return;
@@ -1183,8 +1217,21 @@ const urlParams = new URLSearchParams(window.location.search);
 const trackParam = urlParams.get('track');
 if(trackParam){
   document.getElementById('pin').value = trackParam;
-  setTimeout(doTrack, 400);
+  setTimeout(() => doTrack(trackParam), 300);
 }
+
+// 🟢 Cross-Tab Instant 0-Lag Tracking Trigger
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'TRACK_PLATE' && event.data.plate) {
+    document.getElementById('pin').value = event.data.plate;
+    doTrack(event.data.plate);
+  }
+});
+window.trackPlate = function(plate) {
+  if (!plate) return;
+  document.getElementById('pin').value = plate;
+  doTrack(plate);
+};
 
 </script>
 </body>

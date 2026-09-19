@@ -1,9 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./VehicleTrackingView.css";
 
 export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
   const [activeTab, setActiveTab] = useState("map"); // "map" | "firebase"
-  const [targetPlate, setTargetPlate] = useState("");
+  const [targetPlate, setTargetPlate] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("track") || "";
+    } catch {
+      return "";
+    }
+  });
+  const iframeRef = useRef(null);
   const [firebaseData, setFirebaseData] = useState({
     status: null,
     plates: [],
@@ -15,6 +22,19 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
     if (!plate) return;
     setTargetPlate(plate);
     setActiveTab("map");
+    // Instantaneous communication to the map iframe without unmounting/reloading
+    setTimeout(() => {
+      try {
+        if (iframeRef.current && iframeRef.current.contentWindow) {
+          iframeRef.current.contentWindow.postMessage({ type: "TRACK_PLATE", plate }, "*");
+          if (typeof iframeRef.current.contentWindow.trackPlate === "function") {
+            iframeRef.current.contentWindow.trackPlate(plate);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }, 50);
   }
 
   // Fetch live Central Firebase data when the Firebase tab is selected
@@ -105,14 +125,13 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
 
       {/* Tab Viewports */}
       <div className="vt-viewport">
-        {activeTab === "map" && (
-          <iframe
-            key={targetPlate}
-            src={`/vehicle-tracking/dashboard.html${targetPlate ? `?track=${encodeURIComponent(targetPlate)}` : ''}`}
-            title="Citywide ANPR Vehicle Tracking Dashboard"
-            className="vt-iframe"
-          />
-        )}
+        <iframe
+          ref={iframeRef}
+          src={`/vehicle-tracking/dashboard.html${targetPlate ? `?track=${encodeURIComponent(targetPlate)}` : ''}`}
+          title="Citywide ANPR Vehicle Tracking Dashboard"
+          className="vt-iframe"
+          style={{ display: activeTab === "map" ? "block" : "none" }}
+        />
 
         {activeTab === "firebase" && (
           <div className="vt-firebase-view">

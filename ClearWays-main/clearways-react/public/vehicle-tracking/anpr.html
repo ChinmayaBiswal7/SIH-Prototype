@@ -493,6 +493,22 @@ html,body{width:100%;height:100%;background:#020617;color:#f8fafc;font-family:-a
                 <div class="rto-lbl">Distinguishing Exterior Cues</div>
                 <div class="rto-val" id="unplated-features" style="font-size:.76rem;color:#cbd5e1">--</div>
               </div>
+              <div class="rto-item full" style="border-top:1px solid #334155;padding-top:8px;margin-top:4px">
+                <div class="rto-lbl" style="color:#a5b4fc"><i class="fa-solid fa-person"></i> In-Cabin Occupants &amp; Dress Profiling</div>
+                <div class="rto-val" id="unplated-cabin" style="font-size:.78rem;color:#f8fafc">--</div>
+              </div>
+              <div class="rto-item full">
+                <div class="rto-lbl" style="color:#fde68a"><i class="fa-solid fa-shapes"></i> Windshield &amp; Dashboard Micro-Objects</div>
+                <div class="rto-val" id="unplated-dashboard" style="font-size:.78rem;color:#fde68a">--</div>
+              </div>
+              <div class="rto-item full">
+                <div class="rto-lbl" style="color:#34d399"><i class="fa-solid fa-gauge-high"></i> Kinematics &amp; Telemetry Signature</div>
+                <div class="rto-val" id="unplated-kinematics" style="font-size:.78rem;color:#34d399">--</div>
+              </div>
+              <div class="rto-item full">
+                <div class="rto-lbl" style="color:#f472b6"><i class="fa-solid fa-fingerprint"></i> Anti-Twin Disambiguation Fingerprint</div>
+                <div class="rto-val" id="unplated-twin" style="font-size:.74rem;color:#cbd5e1;line-height:1.4">--</div>
+              </div>
             </div>
           </div>
 
@@ -1124,6 +1140,27 @@ async function openInspectModal(d){
     document.getElementById('unplated-secondary').textContent = prof.secondary_color || 'Monotone Body Finish';
     document.getElementById('unplated-features').textContent = prof.distinguishing_features || 'Visual Aerodynamic Stance, Multi-Spoke Wheel Styling, Integrated Lighting Architecture';
     document.getElementById('unplated-id').textContent = targetId;
+
+    // In-Cabin & Dashboard Deep Disambiguation Profiling
+    const cabinEl = document.getElementById('unplated-cabin');
+    if(cabinEl){
+      const occText = prof.occupant_count > 1 ? `${prof.occupant_count} Occupants` : 'Solo Driver';
+      const drvText = prof.driver_attire || 'Dark Attire';
+      const passText = prof.passenger_attire && prof.passenger_attire !== 'None' && prof.passenger_attire !== 'Solo Rider' ? ` | Passenger: ${prof.passenger_attire}` : '';
+      cabinEl.innerHTML = `<b style="color:#f8fafc">${occText}</b> &mdash; Driver: <span style="color:#a5b4fc">${drvText}</span>${passText}`;
+    }
+    const dashEl = document.getElementById('unplated-dashboard');
+    if(dashEl){
+      dashEl.innerHTML = `<b style="color:#fde68a">${prof.dashboard_items || 'Clean Dashboard (No Obstructing Items)'}</b>`;
+    }
+    const kinEl = document.getElementById('unplated-kinematics');
+    if(kinEl){
+      kinEl.innerHTML = `<b style="color:#34d399">${prof.driving_style || 'Steady Arterial Cruise (44 km/h)'}</b>`;
+    }
+    const twinEl = document.getElementById('unplated-twin');
+    if(twinEl){
+      twinEl.textContent = prof.twin_disambiguation || 'Distinguished from identically colored brand-new showroom vehicles via interior micro-objects, occupant clothing hues, and trajectory velocity.';
+    }
 
   } else {
     if(secRegistered) secRegistered.style.display = 'flex';

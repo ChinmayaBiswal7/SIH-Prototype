@@ -1008,6 +1008,10 @@ async function rGhosts(){
             <div><span style="color:#64748b">Color:</span> <b style="color:${hex}">${domColor}</b>${secColor ? ' / '+secColor : ''}</div>
             <div><span style="color:#64748b">Route:</span> <span style="color:#38bdf8">${g.first_camera}</span> &rarr; <span style="color:#22c55e">${g.last_camera}</span></div>
             <div><span style="color:#64748b">Last:</span> ${lastSeen}</div>
+            <div style="margin-top:5px;padding-top:5px;border-top:1px dashed #334155;display:flex;flex-direction:column;gap:2px;font-size:.69rem">
+              <div><span style="color:#818cf8">👤 Cabin:</span> <b style="color:#e2e8f0">${(g.occupant_count > 1 ? g.occupant_count + ' Occupants' : 'Solo Driver') + (g.driver_attire ? ' &middot; ' + g.driver_attire.split('(')[0].trim() : '')}</b></div>
+              <div><span style="color:#fde68a">🧸 Dash:</span> <b style="color:#fde68a">${g.dashboard_items ? g.dashboard_items.split('+')[0].trim() : 'Clean Dash'}</b></div>
+            </div>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
@@ -1170,7 +1174,7 @@ async function openGhostInspectModal(ghostId){
             <div style="background:#0f172a;border-radius:6px;padding:10px;font-size:.74rem;color:#94a3b8;line-height:1.6;margin-bottom:10px;">
               <div><b style="color:#f1f5f9">Upper Zone (Roof/Pillars):</b> ${p.secondary_color || 'Standard Glass/Roof'}</div>
               <div><b style="color:#f1f5f9">Lower Zone (Panels/Doors):</b> ${p.dominant_color} (${hex})</div>
-              <div><b style="color:#f1f5f9">Feature Embedding:</b> 64-D L2-Normalized Spatial Signature</div>
+              <div><b style="color:#f1f5f9">Feature Embedding:</b> 96-D Multi-Modal L2-Normalized Signature</div>
             </div>
             <div style="background:#83184322;border:1px solid #db277744;border-radius:6px;padding:8px 10px;font-size:.72rem;color:#fce7f3">
               🛡️ <b>Law Enforcement Notice:</b> This vehicle has been caught with no number plate across <b>${p.total_sightings || s.length}</b> distinct camera checkpoints.
@@ -1179,6 +1183,38 @@ async function openGhostInspectModal(ghostId){
           <button class="btn-sm blue" style="width:100%;margin-top:14px;padding:8px;font-weight:700" onclick="closeGhostInspectModal();trackGhost('${p.ghost_id}')">
             🗺️ Open Live Trajectory On Map &rarr;
           </button>
+        </div>
+      </div>
+
+      <!-- IN-CABIN & WINDSHIELD DEEP DISAMBIGUATION (ANTI-TWIN ENGINE) -->
+      <div style="background:#1e1b4b33;border:1px solid #6366f188;border-radius:10px;padding:14px;margin-bottom:18px;box-shadow:0 4px 20px rgba(99,102,241,0.15)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="color:#a5b4fc;font-size:.86rem;font-weight:700;display:flex;align-items:center;gap:6px;">
+            <span>🔬</span> In-Cabin &amp; Windshield Deep Profiling (Anti-Twin Disambiguation Engine)
+          </div>
+          <span style="background:#4338ca;color:#e0e7ff;padding:2px 8px;border-radius:4px;font-size:.68rem;font-weight:700">
+            Multi-Modal RoI Active
+          </span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:.74rem;color:#cbd5e1;background:#0f172a;padding:10px 12px;border-radius:8px;border:1px solid #312e81;">
+          <div>
+            <div style="color:#818cf8;font-weight:700;margin-bottom:2px">👤 Cabin Occupants &amp; Dress</div>
+            <div style="font-weight:800;color:#f8fafc;font-size:.8rem">${p.occupant_count > 1 ? p.occupant_count + ' Occupants' : 'Solo Driver'}</div>
+            <div style="color:#94a3b8;font-size:.7rem;margin-top:2px">${p.driver_attire || 'Dark Attire'}</div>
+          </div>
+          <div>
+            <div style="color:#fde68a;font-weight:700;margin-bottom:2px">🧸 Dashboard &amp; Windshield Items</div>
+            <div style="font-weight:800;color:#fde68a;font-size:.78rem">${p.dashboard_items || 'Clean Dashboard'}</div>
+            <div style="color:#64748b;font-size:.7rem;margin-top:2px">Deity / Toys / Mirror Beads / FASTag</div>
+          </div>
+          <div>
+            <div style="color:#34d399;font-weight:700;margin-bottom:2px">⚡ Driving Kinematics &amp; Telemetry</div>
+            <div style="font-weight:800;color:#34d399;font-size:.78rem">${p.driving_style || 'Normal Arterial Flow'}</div>
+            <div style="color:#64748b;font-size:.7rem;margin-top:2px">Speed Profile &amp; Acceleration Curve</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:.73rem;color:#c7d2fe;background:#312e8144;padding:8px 12px;border-radius:6px;border-left:3px solid #818cf8;line-height:1.45">
+          💡 <b>Twin-Vehicle Disambiguation:</b> ${p.twin_disambiguation || 'Differentiated from identically colored brand-new showroom vehicles via interior micro-objects, occupant clothing hues, and trajectory velocity.'}
         </div>
       </div>
 

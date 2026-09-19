@@ -208,7 +208,13 @@ def init_db():
         ("estimated_model", "TEXT DEFAULT ''"),
         ("make_confidence", "REAL DEFAULT 0.0"),
         ("distinguishing_features", "TEXT DEFAULT ''"),
-        ("runner_up", "TEXT DEFAULT ''")
+        ("runner_up", "TEXT DEFAULT ''"),
+        ("occupant_count", "INTEGER DEFAULT 1"),
+        ("driver_attire", "TEXT DEFAULT 'Dark Shirt'"),
+        ("dashboard_items", "TEXT DEFAULT 'None Detected'"),
+        ("driving_style", "TEXT DEFAULT 'Normal Urban Flow'"),
+        ("twin_disambiguation", "TEXT DEFAULT ''"),
+        ("in_cabin_profile", "TEXT DEFAULT '{}'")
     ]:
         try:
             c.execute(f"ALTER TABLE ghost_profiles ADD COLUMN {col} {col_type}")
@@ -234,32 +240,49 @@ def init_db():
     for cam in DEFAULT_CAMERAS:
         c.execute("INSERT OR REPLACE INTO cameras (id, name, road, lat, lon, area) VALUES (?,?,?,?,?,?)", cam)
 
-    # Seed demo unplated ghost suspect profiles if none exist
-    existing_ghosts = c.execute("SELECT COUNT(*) FROM ghost_profiles").fetchone()[0]
-    if existing_ghosts == 0:
-        demo_ghosts = [
-            ("GHOST_01", "Car", "Sedan", "Silver", "Tinted Glass", "#94A3B8", 1.6, "[]", "2026-09-17T18:10:00", "2026-09-17T19:25:00", "CAM_PATIA", "CAM_JAYADEV", 3, "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706871/ghost_01_sedan.jpg", "ACTIVE_TRACKING", "Hyundai", "Verna", 0.91, "Missing front plate & dark side tint", "Honda City"),
-            ("GHOST_02", "SUV", "SUV", "Black", "Black Grille", "#1E293B", 1.4, "[]", "2026-09-17T17:45:00", "2026-09-17T19:10:00", "CAM_KHANDG", "CAM_FIRE_STN", 2, "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706873/ghost_02_suv.jpg", "ACTIVE_TRACKING", "Mahindra", "Scorpio-N", 0.88, "Completely removed front/rear plates", "Tata Harrier"),
-            ("GHOST_03", "Car", "Hatchback", "White", "Mud Splatter", "#F8FAFC", 1.5, "[]", "2026-09-17T18:30:00", "2026-09-17T19:35:00", "CAM_RASUL", "CAM_MAST", 3, "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706877/ghost_03_hatch.jpg", "ACTIVE_TRACKING", "Maruti", "Swift", 0.86, "Deliberately mud-covered number plate", "Hyundai i20"),
-            ("GHOST_04", "Motorbike", "Sports", "Red", "Black Decals", "#EF4444", 1.2, "[]", "2026-09-17T18:50:00", "2026-09-17T19:40:00", "CAM_KIIT", "CAM_INFOCITY", 2, "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706880/ghost_04_bike.jpg", "ACTIVE_TRACKING", "Yamaha", "R15", 0.94, "Folded tail plate bracket", "KTM RC"),
-        ]
-        for g in demo_ghosts:
-            c.execute("""
-                INSERT OR IGNORE INTO ghost_profiles
-                (ghost_id, vehicle_type, body_subtype, dominant_color, secondary_color,
-                 color_hex, aspect_ratio, visual_embedding, first_seen_ts, last_seen_ts,
-                 first_camera, last_camera, total_sightings, best_image_path, status,
-                 estimated_make, estimated_model, make_confidence, distinguishing_features, runner_up)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, g)
-            c.execute("""
-                INSERT OR IGNORE INTO ghost_sightings (ghost_id, camera_id, timestamp, image_path, match_score, speed_kmph)
-                VALUES (?,?,?,?,?,?)
-            """, (g[0], g[10], g[8], g[13], 0.98, 48.0))
-            c.execute("""
-                INSERT OR IGNORE INTO ghost_sightings (ghost_id, camera_id, timestamp, image_path, match_score, speed_kmph)
-                VALUES (?,?,?,?,?,?)
-            """, (g[0], g[11], g[9], g[13], 0.94, 52.0))
+    demo_ghosts = [
+        ("GHOST_01", "Car", "Sedan", "Silver", "Tinted Glass", "#94A3B8", 1.6, "[]", "2026-09-17T18:10:00", "2026-09-17T19:25:00", "CAM_PATIA", "CAM_JAYADEV", 3, "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706871/ghost_01_sedan.jpg", "ACTIVE_TRACKING", "Hyundai", "Verna", 0.91, "Missing front plate & dark side tint", "Honda City", 1, "Navy Blue Polo Shirt (Eyeglasses)", "Lord Ganesha Figurine (Gold) + Centered FASTag", "Steady Arterial Cruise (45 km/h)", "Distinguished from newly-bought showroom Vernas by gold dashboard idol, centered RFID tag, and solo driver in navy polo.", '{"occupants": 1, "driver_attire": "Navy Blue Polo", "driver_hex": "#1E3A8A", "passenger_attire": "None", "dashboard_items": ["Gold Ganesha Figurine", "Centered FASTag RFID Barcode"], "kinematics": {"speed": "45 km/h", "lane": "Center Lane", "accel": "Gentle Linear"}, "twin_anti_clone": "Differentiated from factory-fresh Verna via gold dashboard deity, RFID placement & navy blue driver attire."}'),
+        ("GHOST_02", "SUV", "SUV", "Black", "Black Grille", "#1E293B", 1.4, "[]", "2026-09-17T17:45:00", "2026-09-17T19:10:00", "CAM_KHANDG", "CAM_FIRE_STN", 2, "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706873/ghost_02_suv.jpg", "ACTIVE_TRACKING", "Mahindra", "Scorpio-N", 0.88, "Completely removed front/rear plates", "Tata Harrier", 2, "White Kurta (Driver) + Red T-Shirt (Passenger)", "Hanging Wooden Beads on Mirror + Left Transit Slip", "Aggressive Highway Pace (62 km/h Fast Lane)", "Differentiated from identical showroom Scorpios by dual occupancy (driver in white, passenger in red) & rearview mirror hanging beads.", '{"occupants": 2, "driver_attire": "White Kurta", "driver_hex": "#F8FAFC", "passenger_attire": "Red T-Shirt", "dashboard_items": ["Rearview Wooden Mala Beads", "Left Showroom Delivery Permit"], "kinematics": {"speed": "62 km/h", "lane": "Right / Overtaking Lane", "accel": "Rapid Throttle Bursts"}, "twin_anti_clone": "Distinguished from brand new showroom Scorpio-N by dual occupants in contrasting attire and hanging mirror mala."}'),
+        ("GHOST_03", "Car", "Hatchback", "White", "Mud Splatter", "#F8FAFC", 1.5, "[]", "2026-09-17T18:30:00", "2026-09-17T19:35:00", "CAM_RASUL", "CAM_MAST", 3, "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706877/ghost_03_hatch.jpg", "ACTIVE_TRACKING", "Maruti", "Swift", 0.86, "Deliberately mud-covered number plate", "Hyundai i20", 3, "Denim Blue Shirt + Black Baseball Cap", "Spring Bobblehead Toy on Left Dash + Air Freshener", "Cautious City Commute (36 km/h Stop-and-Go)", "Differentiated from identical unplated showroom Swifts by bobblehead toy on dash, yellow passenger attire, and 36 km/h low-speed cruising.", '{"occupants": 3, "driver_attire": "Denim Blue Shirt", "driver_hex": "#2563EB", "passenger_attire": "Yellow Kurti (Co-Passenger)", "dashboard_items": ["Spring Bobblehead Toy", "Air Freshener Vent Clip"], "kinematics": {"speed": "36 km/h", "lane": "Left Lane", "accel": "Stop-and-Go Commute"}, "twin_anti_clone": "Distinguished from unplated showroom Swift by bobblehead toy on dash, yellow passenger attire, and 36 km/h low-speed cruising."}'),
+        ("GHOST_04", "Motorbike", "Sports", "Red", "Black Decals", "#EF4444", 1.2, "[]", "2026-09-17T18:50:00", "2026-09-17T19:40:00", "CAM_KIIT", "CAM_INFOCITY", 2, "https://res.cloudinary.com/me4hfkhj/image/upload/v1789706880/ghost_04_bike.jpg", "ACTIVE_TRACKING", "Yamaha", "R15", 0.94, "Folded tail plate bracket", "KTM RC", 1, "Black Riding Jacket + Red Full-Face Helmet", "Handlebar Aluminum Phone Mount & Tank Grips", "High-Speed Dynamic Weaving (58 km/h)", "Differentiated by rider red helmet, phone mount, and rapid throttle dynamics.", '{"occupants": 1, "driver_attire": "Black Armored Jacket", "driver_hex": "#0F172A", "passenger_attire": "Solo Rider", "dashboard_items": ["Handlebar Aluminum Phone Clamp", "Tank Grip Decals"], "kinematics": {"speed": "58 km/h", "lane": "Lane Splitting", "accel": "High RPM Bursts"}, "twin_anti_clone": "Distinguished by rider red helmet, phone mount, and rapid throttle dynamics."}'),
+    ]
+    for g in demo_ghosts:
+        c.execute("""
+            INSERT OR REPLACE INTO ghost_profiles
+            (ghost_id, vehicle_type, body_subtype, dominant_color, secondary_color,
+             color_hex, aspect_ratio, visual_embedding, first_seen_ts, last_seen_ts,
+             first_camera, last_camera, total_sightings, best_image_path, status,
+             estimated_make, estimated_model, make_confidence, distinguishing_features, runner_up,
+             occupant_count, driver_attire, dashboard_items, driving_style, twin_disambiguation, in_cabin_profile)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, g)
+        c.execute("""
+            INSERT OR IGNORE INTO ghost_sightings (ghost_id, camera_id, timestamp, image_path, match_score, speed_kmph)
+            VALUES (?,?,?,?,?,?)
+        """, (g[0], g[10], g[8], g[13], 0.98, 48.0))
+        c.execute("""
+            INSERT OR IGNORE INTO ghost_sightings (ghost_id, camera_id, timestamp, image_path, match_score, speed_kmph)
+            VALUES (?,?,?,?,?,?)
+        """, (g[0], g[11], g[9], g[13], 0.94, 52.0))
+
+    # Always ensure existing demo ghosts have the in-cabin details populated
+    cabin_updates = [
+        ("GHOST_01", 1, "Navy Blue Polo Shirt (Eyeglasses)", "Lord Ganesha Figurine (Gold) + Centered FASTag", "Steady Arterial Cruise (45 km/h)", "Distinguished from newly-bought showroom Vernas by gold dashboard idol, centered RFID tag, and solo driver in navy polo.", '{"occupants": 1, "driver_attire": "Navy Blue Polo", "driver_hex": "#1E3A8A", "passenger_attire": "None", "dashboard_items": ["Gold Ganesha Figurine", "Centered FASTag RFID Barcode"], "kinematics": {"speed": "45 km/h", "lane": "Center Lane", "accel": "Gentle Linear"}, "twin_anti_clone": "Differentiated from factory-fresh Verna via gold dashboard deity, RFID placement & navy blue driver attire."}'),
+        ("GHOST_02", 2, "White Kurta (Driver) + Red T-Shirt (Passenger)", "Hanging Wooden Beads on Mirror + Left Transit Slip", "Aggressive Highway Pace (62 km/h Fast Lane)", "Differentiated from identical showroom Scorpios by dual occupancy (driver in white, passenger in red) & rearview mirror hanging beads.", '{"occupants": 2, "driver_attire": "White Kurta", "driver_hex": "#F8FAFC", "passenger_attire": "Red T-Shirt", "dashboard_items": ["Rearview Wooden Mala Beads", "Left Showroom Delivery Permit"], "kinematics": {"speed": "62 km/h", "lane": "Right / Overtaking Lane", "accel": "Rapid Throttle Bursts"}, "twin_anti_clone": "Distinguished from brand new showroom Scorpio-N by dual occupants in contrasting attire and hanging mirror mala."}'),
+        ("GHOST_03", 3, "Denim Blue Shirt + Black Baseball Cap", "Spring Bobblehead Toy on Left Dash + Air Freshener", "Cautious City Commute (36 km/h Stop-and-Go)", "Differentiated from identical unplated showroom Swifts by bobblehead toy on dash, yellow passenger attire, and 36 km/h low-speed cruising.", '{"occupants": 3, "driver_attire": "Denim Blue Shirt", "driver_hex": "#2563EB", "passenger_attire": "Yellow Kurti (Co-Passenger)", "dashboard_items": ["Spring Bobblehead Toy", "Air Freshener Vent Clip"], "kinematics": {"speed": "36 km/h", "lane": "Left Lane", "accel": "Stop-and-Go Commute"}, "twin_anti_clone": "Distinguished from unplated showroom Swift by bobblehead toy on dash, yellow passenger attire, and 36 km/h low-speed cruising."}'),
+        ("GHOST_04", 1, "Black Riding Jacket + Red Full-Face Helmet", "Handlebar Aluminum Phone Mount & Tank Grips", "High-Speed Dynamic Weaving (58 km/h)", "Differentiated by rider red helmet, phone mount, and rapid throttle dynamics.", '{"occupants": 1, "driver_attire": "Black Armored Jacket", "driver_hex": "#0F172A", "passenger_attire": "Solo Rider", "dashboard_items": ["Handlebar Aluminum Phone Clamp", "Tank Grip Decals"], "kinematics": {"speed": "58 km/h", "lane": "Lane Splitting", "accel": "High RPM Bursts"}, "twin_anti_clone": "Distinguished by rider red helmet, phone mount, and rapid throttle dynamics."}')
+    ]
+    for gid, occ, att, dash, drv, twin, icp in cabin_updates:
+        c.execute("""
+            UPDATE ghost_profiles
+            SET occupant_count = ?,
+                driver_attire = ?,
+                dashboard_items = ?,
+                driving_style = ?,
+                twin_disambiguation = ?,
+                in_cabin_profile = ?
+            WHERE ghost_id = ?
+        """, (occ, att, dash, drv, twin, icp, gid))
 
     conn.commit()
     conn.close()
@@ -656,15 +679,18 @@ def upsert_ghost_profile(ghost_id, vehicle_type, body_subtype, dominant_color,
                          first_camera="", last_camera="", total_sightings=1,
                          best_image_path="", status="ACTIVE_TRACKING",
                          estimated_make="", estimated_model="", make_confidence=0.0,
-                         distinguishing_features="", runner_up=""):
+                         distinguishing_features="", runner_up="",
+                         occupant_count=1, driver_attire="", dashboard_items="",
+                         driving_style="", twin_disambiguation="", in_cabin_profile="{}"):
     conn = get_conn()
     conn.execute("""
         INSERT INTO ghost_profiles
             (ghost_id, vehicle_type, body_subtype, dominant_color, secondary_color,
              color_hex, aspect_ratio, visual_embedding, first_seen_ts, last_seen_ts,
              first_camera, last_camera, total_sightings, best_image_path, status,
-             estimated_make, estimated_model, make_confidence, distinguishing_features, runner_up)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             estimated_make, estimated_model, make_confidence, distinguishing_features, runner_up,
+             occupant_count, driver_attire, dashboard_items, driving_style, twin_disambiguation, in_cabin_profile)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(ghost_id) DO UPDATE SET
             last_seen_ts = excluded.last_seen_ts,
             last_camera = excluded.last_camera,
@@ -674,11 +700,18 @@ def upsert_ghost_profile(ghost_id, vehicle_type, body_subtype, dominant_color,
             estimated_model = CASE WHEN excluded.estimated_model != '' THEN excluded.estimated_model ELSE ghost_profiles.estimated_model END,
             make_confidence = CASE WHEN excluded.make_confidence > 0 THEN excluded.make_confidence ELSE ghost_profiles.make_confidence END,
             distinguishing_features = CASE WHEN excluded.distinguishing_features != '' THEN excluded.distinguishing_features ELSE ghost_profiles.distinguishing_features END,
-            runner_up = CASE WHEN excluded.runner_up != '' THEN excluded.runner_up ELSE ghost_profiles.runner_up END
+            runner_up = CASE WHEN excluded.runner_up != '' THEN excluded.runner_up ELSE ghost_profiles.runner_up END,
+            occupant_count = CASE WHEN excluded.occupant_count > 0 THEN excluded.occupant_count ELSE ghost_profiles.occupant_count END,
+            driver_attire = CASE WHEN excluded.driver_attire != '' THEN excluded.driver_attire ELSE ghost_profiles.driver_attire END,
+            dashboard_items = CASE WHEN excluded.dashboard_items != '' THEN excluded.dashboard_items ELSE ghost_profiles.dashboard_items END,
+            driving_style = CASE WHEN excluded.driving_style != '' THEN excluded.driving_style ELSE ghost_profiles.driving_style END,
+            twin_disambiguation = CASE WHEN excluded.twin_disambiguation != '' THEN excluded.twin_disambiguation ELSE ghost_profiles.twin_disambiguation END,
+            in_cabin_profile = CASE WHEN excluded.in_cabin_profile != '{}' THEN excluded.in_cabin_profile ELSE ghost_profiles.in_cabin_profile END
     """, (ghost_id, vehicle_type, body_subtype, dominant_color, secondary_color,
           color_hex, aspect_ratio, visual_embedding, first_seen_ts, last_seen_ts,
           first_camera, last_camera, total_sightings, best_image_path, status,
-          estimated_make, estimated_model, make_confidence, distinguishing_features, runner_up))
+          estimated_make, estimated_model, make_confidence, distinguishing_features, runner_up,
+          occupant_count, driver_attire, dashboard_items, driving_style, twin_disambiguation, in_cabin_profile))
     conn.commit(); conn.close()
 
 

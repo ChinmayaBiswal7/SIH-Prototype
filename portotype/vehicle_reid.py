@@ -142,7 +142,13 @@ def match_or_create_ghost(profile, camera_id, timestamp, image_path, speed_kmph=
             estimated_model=profile.get("estimated_model", ""),
             make_confidence=profile.get("make_confidence", 0.0),
             distinguishing_features=profile.get("distinguishing_features", ""),
-            runner_up=runner_up_json
+            runner_up=runner_up_json,
+            occupant_count=profile.get("occupant_count", profile.get("in_cabin_profile", {}).get("total_people_count", 1) if isinstance(profile.get("in_cabin_profile"), dict) else 1),
+            driver_attire=profile.get("driver_attire", ""),
+            dashboard_items=profile.get("dashboard_items", ""),
+            driving_style=profile.get("driving_style", ""),
+            twin_disambiguation=profile.get("twin_disambiguation", ""),
+            in_cabin_profile=json.dumps(profile.get("in_cabin_profile")) if isinstance(profile.get("in_cabin_profile"), dict) else (profile.get("in_cabin_profile") or "{}")
         )
         db.insert_ghost_sighting(
             ghost_id=new_ghost_id,

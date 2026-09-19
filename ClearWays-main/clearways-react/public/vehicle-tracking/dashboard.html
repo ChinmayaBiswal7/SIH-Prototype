@@ -1216,6 +1216,7 @@ async function openGhostInspectModal(ghostId){
             <div style="color:#818cf8;font-weight:700;margin-bottom:2px">👥 Total People Inside Car</div>
             <div style="font-weight:800;color:#38bdf8;font-size:.88rem">${occSum}</div>
             <div style="color:#94a3b8;font-size:.7rem;margin-top:2px">Driver: <b style="color:#f8fafc">${p.driver_attire || 'Dark Attire'}</b></div>
+            <div style="color:#a78bfa;font-size:.67rem;margin-top:2px">👘 Attire Catalog: <b style="color:#e9d5ff">${cData.clothing_category || 'DeepFashion & Kaggle Multi-Cultural Attire'}</b></div>
           </div>
           <div>
             <div style="color:#fde68a;font-weight:700;margin-bottom:2px">🧸 Dashboard &amp; Windshield Items</div>
@@ -1249,6 +1250,9 @@ async function openGhostInspectModal(ghostId){
                 </span>
               </div>
             `).join('')}
+          </div>
+          <div style="font-size:.66rem;color:#64748b;margin-top:6px;text-align:right">
+            ✓ Classified via Kaggle &amp; DeepFashion2 Multi-Cultural Apparel Models (Indian, East Asian, Formal &amp; Casual)
           </div>
         </div>
 

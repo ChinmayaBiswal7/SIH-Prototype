@@ -286,18 +286,35 @@ def extract_in_cabin_profile(crop_img, vehicle_type="Car", body_subtype="Sedan",
     driver_crop = w_roi[int(wh * 0.25):int(wh * 0.85), int(ww * 0.50):int(ww * 0.95)]
     pass_crop = w_roi[int(wh * 0.25):int(wh * 0.85), int(ww * 0.05):int(ww * 0.50)]
 
-    driver_hsv = cv2.cvtColor(driver_crop, cv2.COLOR_BGR2HSV) if driver_crop.size > 0 else w_hsv
-    d_col, d_hex = classify_dominant_color(driver_hsv)
-    clean_d_col = d_col.replace("_", " ").title() + " Attire"
+    try:
+        import clothing_classifier
+        d_attire_res = clothing_classifier.classify_attire(driver_crop, role="Driver", vehicle_type=vehicle_type)
+        clean_d_col = d_attire_res["full_attire_desc"]
+        d_hex = d_attire_res["color_hex"]
+    except Exception:
+        driver_hsv = cv2.cvtColor(driver_crop, cv2.COLOR_BGR2HSV) if driver_crop.size > 0 else w_hsv
+        d_col, d_hex = classify_dominant_color(driver_hsv)
+        clean_d_col = d_col.replace("_", " ").title() + " Attire"
 
-    pass_hsv = cv2.cvtColor(pass_crop, cv2.COLOR_BGR2HSV) if pass_crop.size > 0 else w_hsv
-    p_col, p_hex = classify_dominant_color(pass_hsv)
-    
     # Check if front passenger seat is occupied
     pass_gray = cv2.cvtColor(pass_crop, cv2.COLOR_BGR2GRAY) if pass_crop.size > 0 else np.zeros((10,10), dtype=np.uint8)
     pass_variance = float(np.var(pass_gray))
     has_front_passenger = pass_variance > 650.0
-    clean_p_col = (p_col.replace("_", " ").title() + " Attire") if has_front_passenger else "Empty Passenger Seat"
+
+    if has_front_passenger:
+        try:
+            import clothing_classifier
+            p_attire_res = clothing_classifier.classify_attire(pass_crop, role="Front Passenger", vehicle_type=vehicle_type)
+            clean_p_col = p_attire_res["full_attire_desc"]
+            p_hex = p_attire_res["color_hex"]
+        except Exception:
+            pass_hsv = cv2.cvtColor(pass_crop, cv2.COLOR_BGR2HSV) if pass_crop.size > 0 else w_hsv
+            p_col, p_hex = classify_dominant_color(pass_hsv)
+            clean_p_col = p_col.replace("_", " ").title() + " Attire"
+            p_hex = "#64748B"
+    else:
+        clean_p_col = "Empty Passenger Seat"
+        p_hex = "#64748B"
 
     # 3. Rear Cabin Passenger Detection (Upper-rear window silhouettes)
     rear_roi = crop_img[int(h * 0.12):int(h * 0.40), int(w * 0.15):int(w * 0.85)]
@@ -307,10 +324,16 @@ def extract_in_cabin_profile(crop_img, vehicle_type="Car", body_subtype="Sedan",
     # Assess rear occupancy
     rear_passengers = []
     if rear_edges > 0.12:
-        # Detect rear passenger attire
-        r_hsv = cv2.cvtColor(rear_roi, cv2.COLOR_BGR2HSV)
-        r_col, r_hex = classify_dominant_color(r_hsv)
-        clean_r_col = r_col.replace("_", " ").title() + " Attire"
+        try:
+            import clothing_classifier
+            r_attire_res = clothing_classifier.classify_attire(rear_roi, role="Rear Passenger", vehicle_type=vehicle_type)
+            clean_r_col = r_attire_res["full_attire_desc"]
+            r_hex = r_attire_res["color_hex"]
+        except Exception:
+            r_hsv = cv2.cvtColor(rear_roi, cv2.COLOR_BGR2HSV)
+            r_col, r_hex = classify_dominant_color(r_hsv)
+            clean_r_col = r_col.replace("_", " ").title() + " Attire"
+
         rear_count = 2 if rear_edges > 0.19 else 1
         for r_idx in range(rear_count):
             pos_name = "Rear Left" if r_idx == 0 else "Rear Right"

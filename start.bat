@@ -1,15 +1,15 @@
 @echo off
-title ClearWays Full-Stack Launcher
+title VeloCiTI Full-Stack Launcher
 color 0b
 echo ================================================================
-echo           CLEARWAYS - URBAN TRAFFIC MANAGEMENT SYSTEM
+echo           VELOCITI - URBAN TRAFFIC MANAGEMENT SYSTEM
 echo ================================================================
 echo.
 echo [1/2] Launching CityFlow Multi-Agent Python Server (Port 5000)...
 start "CityFlow Backend Server" cmd /k "cd /d \"%~dp0city flow model\" && python server_standalone.py"
 
-echo [2/2] Launching ClearWays React Dashboard (Port 5173)...
-start "ClearWays React Vite" cmd /k "cd /d \"%~dp0ClearWays-main\clearways-react\" && npm run dev"
+echo [2/2] Launching VeloCiTI React Dashboard (Port 5173)...
+start "VeloCiTI React Vite" cmd /k "cd /d \"%~dp0ClearWays-main\clearways-react\" && npm run dev"
 
 echo.
 echo ================================================================

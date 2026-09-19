@@ -16,7 +16,7 @@ export default function PortalSelector({ onSelectPortal, currentUser, onLogout }
             <i className="fas fa-network-wired" />
           </div>
           <div>
-            <h1 className="portal-title">ClearWays Command Nexus</h1>
+            <h1 className="portal-title">VeloCiTI Command Nexus</h1>
             <p className="portal-subtitle">Bhubaneswar Smart City Integrated Traffic & Security Grid</p>
           </div>
         </div>
@@ -37,7 +37,7 @@ export default function PortalSelector({ onSelectPortal, currentUser, onLogout }
         <div className="portal-intro">
           <div className="portal-pill-badge">
             <span className="portal-pulse-dot" />
-            CENTRAL FIREBASE CLOUD CONNECTED • CLEAR-WAYS
+            CENTRAL FIREBASE CLOUD CONNECTED • VELOCITI
           </div>
           <h2 className="portal-headline">Select Operational Command Module</h2>
           <p className="portal-lead">
@@ -58,7 +58,7 @@ export default function PortalSelector({ onSelectPortal, currentUser, onLogout }
             </div>
 
             <div className="portal-card-body">
-              <h3 className="portal-card-title">ClearWays AI Urban Traffic Management</h3>
+              <h3 className="portal-card-title">VeloCiTI AI Urban Traffic Management</h3>
               <p className="portal-card-desc">
                 Real-time adaptive signal control across 100 Bhubaneswar junctions, emergency green corridors,
                 incident management, and CityFlow multi-agent microsimulation.
@@ -143,7 +143,7 @@ export default function PortalSelector({ onSelectPortal, currentUser, onLogout }
       <footer className="portal-footer">
         <div className="portal-footer-item">
           <i className="fas fa-cloud text-sky" />
-          <span>Cloud Backbone: <strong>Firebase Firestore (clear-ways)</strong></span>
+          <span>Cloud Backbone: <strong>Firebase Firestore (VeloCiTI)</strong></span>
         </div>
         <div className="portal-footer-divider" />
         <div className="portal-footer-item">

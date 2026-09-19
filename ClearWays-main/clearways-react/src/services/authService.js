@@ -1,7 +1,7 @@
-// ClearWays Team Authentication & Role-Based Access Control
+// VeloCiTI Team Authentication & Role-Based Access Control
 // Configured with pre-authorized team credentials & whitelist
 
-const AUTH_STORAGE_KEY = "clearways_auth_session";
+const AUTH_STORAGE_KEY = "velociti_auth_session";
 
 // Pre-authorized team members (strictly limited to designated KIIT team accounts)
 export const AUTHORIZED_TEAM_MEMBERS = [

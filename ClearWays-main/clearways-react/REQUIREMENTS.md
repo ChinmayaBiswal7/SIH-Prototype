@@ -1,4 +1,4 @@
-# ClearWays — Setup & Requirements Guide
+# VeloCiTI — Setup & Requirements Guide
 
 ## ✅ System Requirements
 

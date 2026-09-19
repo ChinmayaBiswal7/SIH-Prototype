@@ -58,7 +58,7 @@ export default function LoginScreen({ onLoginSuccess }) {
             <span className="live-dot" />
             <span>SECURE RESTRICTED TERMINAL</span>
           </div>
-          <h1 className="login-title">ClearWays Command HQ</h1>
+          <h1 className="login-title">VeloCiTI Command HQ</h1>
           <p className="login-subtitle">
             Smart Urban Mobility & AI-Driven Green Corridor Platform
           </p>

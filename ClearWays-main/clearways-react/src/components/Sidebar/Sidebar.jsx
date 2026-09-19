@@ -16,7 +16,7 @@ export default function Sidebar({ currentView, onNav, time, date, stats }) {
       <div className="sb-logo">
         <div className="sb-logo-icon"><i className="fas fa-traffic-light" /></div>
         <div>
-          <div className="sb-logo-name">Clear<span>Ways</span></div>
+          <div className="sb-logo-name">Velo<span>CiTI</span></div>
           <div className="sb-logo-ver">Traffic HQ v2.0</div>
         </div>
       </div>

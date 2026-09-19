@@ -1,4 +1,4 @@
-// ClearWays Live Firebase Real-Time Synchronization Engine
+// VeloCiTI Live Firebase Real-Time Synchronization Engine
 // Configured with Firebase Project: clear-ways
 
 import { initializeApp } from "firebase/app";

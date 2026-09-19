@@ -1,4 +1,4 @@
-// High-Reliability Real Road Routing & AI Fastest Path Engine for ClearWays
+// High-Reliability Real Road Routing & AI Fastest Path Engine for VeloCiTI
 // Calculates dynamic traffic-weighted emergency corridors across Bhubaneswar
 
 import { BBSR_INTERSECTIONS, BBSR_ROAD_SEGMENTS, BBSR_INTERSECTION_MAP } from "../data/bbsrCityData";

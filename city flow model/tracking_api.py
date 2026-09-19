@@ -2,7 +2,7 @@
 tracking_api.py - Vehicle Tracking & Central Firebase Integration Bridge
 ========================================================================
 Exposes citywide multi-camera ANPR tracking endpoints, RTO Vahan lookups,
-and central Firebase Firestore synchronization directly on the ClearWays server.
+and central Firebase Firestore synchronization directly on the VeloCiTI server.
 """
 
 import os

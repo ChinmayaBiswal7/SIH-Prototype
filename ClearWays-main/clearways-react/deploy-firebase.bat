@@ -1,8 +1,8 @@
 @echo off
-title ClearWays - Firebase Hosting Deployer
+title VeloCiTI - Firebase Hosting Deployer
 color 0a
 echo ================================================================
-echo            CLEARWAYS - DEPLOY TO FIREBASE HOSTING
+echo            VELOCITI - DEPLOY TO FIREBASE HOSTING
 echo ================================================================
 echo.
 

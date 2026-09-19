@@ -1,4 +1,4 @@
-﻿# ClearWays — Smart Urban Mobility & AI-Driven Green Corridor System
+# VeloCiTI — Smart Urban Mobility & AI-Driven Green Corridor System
 
 > **Smart India Hackathon (SIH) Prototype**  
 > An enterprise-grade, multi-agent AI traffic management platform with real-time dynamic emergency green corridors, adaptive signal coordination, and live cloud telemetry.
@@ -7,7 +7,7 @@
 
 ## 🌟 Executive Summary
 
-Urban traffic congestion impedes emergency vehicle response times and increases metropolitan transit delays. **ClearWays** provides an end-to-end intelligent transportation solution:
+Urban traffic congestion impedes emergency vehicle response times and increases metropolitan transit delays. **VeloCiTI** provides an end-to-end intelligent transportation solution:
 - **Multi-Agent Traffic Signal Control**: Distributed agents coordinating intersection phasing based on real-time vehicle density and queue metrics.
 - **Dynamic Emergency Green Corridor**: Automated preemption along optimal Dijkstra transit paths, clearing intersections dynamically without halting surrounding traffic.
 - **Autonomous In-Browser Simulation**: Dual-mode engine capable of running both local multi-agent Python backend workloads and high-performance in-browser client simulation ticks.

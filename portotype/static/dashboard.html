@@ -1010,7 +1010,8 @@ async function rGhosts(){
             <div><span style="color:#64748b">Route:</span> <span style="color:#38bdf8">${g.first_camera}</span> &rarr; <span style="color:#22c55e">${g.last_camera}</span></div>
             <div><span style="color:#64748b">Last:</span> ${lastSeen}</div>
             <div style="margin-top:5px;padding-top:5px;border-top:1px dashed #334155;display:flex;flex-direction:column;gap:2px;font-size:.69rem">
-              <div><span style="color:#818cf8">👤 Cabin:</span> <b style="color:#e2e8f0">${(g.occupant_count > 1 ? g.occupant_count + ' Occupants' : 'Solo Driver') + (g.driver_attire ? ' &middot; ' + g.driver_attire.split('(')[0].trim() : '')}</b></div>
+              <div><span style="color:#818cf8">👥 People Inside:</span> <b style="color:#38bdf8">${g.occupant_count > 1 ? g.occupant_count + ' People (' + (g.occupant_count===2 ? 'Driver + 1 Passenger' : 'Driver + ' + (g.occupant_count-1) + ' Passengers') + ')' : '1 Person (Solo Driver)'}</b></div>
+              <div><span style="color:#94a3b8">👔 Driver Dress:</span> <b style="color:#cbd5e1">${g.driver_attire ? g.driver_attire.split('(')[0].trim() : 'Dark Attire'}</b></div>
               <div><span style="color:#fde68a">🧸 Dash:</span> <b style="color:#fde68a">${g.dashboard_items ? g.dashboard_items.split('+')[0].trim() : 'Clean Dash'}</b></div>
             </div>
           </div>
@@ -1144,6 +1145,20 @@ async function openGhostInspectModal(ghostId){
     const body = document.getElementById('ghost-inspect-body');
     if(!modal || !body) return;
 
+    let cData = {};
+    try {
+      cData = typeof p.in_cabin_profile === 'string' ? JSON.parse(p.in_cabin_profile || '{}') : (p.in_cabin_profile || {});
+    } catch(e){}
+
+    const totPeople = cData.total_people_count || p.occupant_count || 1;
+    const occSum = cData.occupants_summary || (totPeople > 1 ? `${totPeople} People Inside (Driver + ${totPeople - 1} Passengers)` : '1 Person (Solo Driver)');
+    const sMap = cData.seat_map || [
+      { seat: "Front-Right (Driver)", role: "Driver", occupied: true, attire: p.driver_attire || "Dark Attire", hex: "#1e3a8a" },
+      { seat: "Front-Left (Co-Driver)", role: "Passenger", occupied: totPeople >= 2, attire: totPeople >= 2 ? (p.passenger_attire || "Passenger Attire") : "Empty", hex: totPeople >= 2 ? "#dc2626" : "#475569" },
+      { seat: "Rear-Left", role: "Rear Passenger", occupied: totPeople >= 3, attire: totPeople >= 3 ? "Rear Passenger" : "Empty", hex: totPeople >= 3 ? "#eab308" : "#475569" },
+      { seat: "Rear-Right", role: "Rear Passenger", occupied: totPeople >= 4, attire: totPeople >= 4 ? "Rear Passenger" : "Empty", hex: totPeople >= 4 ? "#16a34a" : "#475569" }
+    ];
+
     body.innerHTML = `
       <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:18px;">
         <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;">
@@ -1191,17 +1206,18 @@ async function openGhostInspectModal(ghostId){
       <div style="background:#1e1b4b33;border:1px solid #6366f188;border-radius:10px;padding:14px;margin-bottom:18px;box-shadow:0 4px 20px rgba(99,102,241,0.15)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <div style="color:#a5b4fc;font-size:.86rem;font-weight:700;display:flex;align-items:center;gap:6px;">
-            <span>🔬</span> In-Cabin &amp; Windshield Deep Profiling (Anti-Twin Disambiguation Engine)
+            <span>🔬</span> In-Cabin People Count &amp; 2D Seating Layout (Anti-Twin Disambiguation Engine)
           </div>
           <span style="background:#4338ca;color:#e0e7ff;padding:2px 8px;border-radius:4px;font-size:.68rem;font-weight:700">
-            Multi-Modal RoI Active
+            Multi-Occupant RoI Active
           </span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:.74rem;color:#cbd5e1;background:#0f172a;padding:10px 12px;border-radius:8px;border:1px solid #312e81;">
+
+        <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;font-size:.74rem;color:#cbd5e1;background:#0f172a;padding:10px 12px;border-radius:8px;border:1px solid #312e81;">
           <div>
-            <div style="color:#818cf8;font-weight:700;margin-bottom:2px">👤 Cabin Occupants &amp; Dress</div>
-            <div style="font-weight:800;color:#f8fafc;font-size:.8rem">${p.occupant_count > 1 ? p.occupant_count + ' Occupants' : 'Solo Driver'}</div>
-            <div style="color:#94a3b8;font-size:.7rem;margin-top:2px">${p.driver_attire || 'Dark Attire'}</div>
+            <div style="color:#818cf8;font-weight:700;margin-bottom:2px">👥 Total People Inside Car</div>
+            <div style="font-weight:800;color:#38bdf8;font-size:.88rem">${occSum}</div>
+            <div style="color:#94a3b8;font-size:.7rem;margin-top:2px">Driver: <b style="color:#f8fafc">${p.driver_attire || 'Dark Attire'}</b></div>
           </div>
           <div>
             <div style="color:#fde68a;font-weight:700;margin-bottom:2px">🧸 Dashboard &amp; Windshield Items</div>
@@ -1214,6 +1230,30 @@ async function openGhostInspectModal(ghostId){
             <div style="color:#64748b;font-size:.7rem;margin-top:2px">Speed Profile &amp; Acceleration Curve</div>
           </div>
         </div>
+
+        <!-- 2D CABIN SEATING SCHEMATIC -->
+        <div style="background:#0b1120;border:1px solid #334155;border-radius:8px;padding:12px;margin-top:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="color:#93c5fd;font-size:.72rem;font-weight:700">💺 2D CABIN SEAT MAPPING &amp; OCCUPANCY SCHEMATIC</span>
+            <span style="background:#0284c7;color:#fff;padding:1px 7px;border-radius:4px;font-size:.65rem;font-weight:700">
+              ${totPeople} / ${sMap.length} SEATS FILLED
+            </span>
+          </div>
+          <div style="display:grid;grid-template-columns:${sMap.length > 2 ? '1fr 1fr' : '1fr'};gap:8px;">
+            ${sMap.map(st => `
+              <div style="background:#1e293b;border:1px solid ${st.occupied ? '#38bdf8' : '#334155'};border-radius:6px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                  <div style="font-size:.72rem;font-weight:700;color:${st.occupied ? '#f8fafc' : '#64748b'}">${st.seat}</div>
+                  <div style="font-size:.68rem;color:${st.occupied ? '#cbd5e1' : '#475569'}">${st.role}: <b style="color:${st.hex||'#cbd5e1'}">${st.attire}</b></div>
+                </div>
+                <span style="background:${st.occupied ? '#0284c733' : '#1e293b'};color:${st.occupied ? '#38bdf8' : '#64748b'};border:1px solid ${st.occupied ? '#0284c7' : '#334155'};font-size:.65rem;padding:2px 6px;border-radius:4px;font-weight:700">
+                  ${st.occupied ? '● OCCUPIED' : '○ EMPTY'}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
         <div style="margin-top:10px;font-size:.73rem;color:#c7d2fe;background:#312e8144;padding:8px 12px;border-radius:6px;border-left:3px solid #818cf8;line-height:1.45">
           💡 <b>Twin-Vehicle Disambiguation:</b> ${p.twin_disambiguation || 'Differentiated from identically colored brand-new showroom vehicles via interior micro-objects, occupant clothing hues, and trajectory velocity.'}
         </div>

@@ -281,9 +281,8 @@ def extract_in_cabin_profile(crop_img, vehicle_type="Car", body_subtype="Sedan",
 
     dash_str = " + ".join(dash_items)
 
-    # 2. Cabin Occupants & Attire Classification
+    # 2. Cabin Occupants & Attire Classification (Front & Rear Row)
     # Driver sits on Right side in India (RHD), front passenger on Left
-    # Analyze right cabin half (X: 50% to 95%) and left cabin half (X: 5% to 50%)
     driver_crop = w_roi[int(wh * 0.25):int(wh * 0.85), int(ww * 0.50):int(ww * 0.95)]
     pass_crop = w_roi[int(wh * 0.25):int(wh * 0.85), int(ww * 0.05):int(ww * 0.50)]
 
@@ -294,15 +293,49 @@ def extract_in_cabin_profile(crop_img, vehicle_type="Car", body_subtype="Sedan",
     pass_hsv = cv2.cvtColor(pass_crop, cv2.COLOR_BGR2HSV) if pass_crop.size > 0 else w_hsv
     p_col, p_hex = classify_dominant_color(pass_hsv)
     
-    # Check if passenger seat is occupied
+    # Check if front passenger seat is occupied
     pass_gray = cv2.cvtColor(pass_crop, cv2.COLOR_BGR2GRAY) if pass_crop.size > 0 else np.zeros((10,10), dtype=np.uint8)
     pass_variance = float(np.var(pass_gray))
-    has_passenger = pass_variance > 650.0
+    has_front_passenger = pass_variance > 650.0
+    clean_p_col = (p_col.replace("_", " ").title() + " Attire") if has_front_passenger else "Empty Passenger Seat"
 
-    occupant_cnt = 2 if has_passenger else 1
-    clean_p_col = (p_col.replace("_", " ").title() + " Attire") if has_passenger else "Empty Passenger Seat"
+    # 3. Rear Cabin Passenger Detection (Upper-rear window silhouettes)
+    rear_roi = crop_img[int(h * 0.12):int(h * 0.40), int(w * 0.15):int(w * 0.85)]
+    rear_gray = cv2.cvtColor(rear_roi, cv2.COLOR_BGR2GRAY) if rear_roi.size > 0 else np.zeros((10,10), dtype=np.uint8)
+    rear_edges = float(np.sum(cv2.Canny(rear_gray, 40, 140) > 0)) / max(1.0, float(rear_gray.size))
+    
+    # Assess rear occupancy
+    rear_passengers = []
+    if rear_edges > 0.12:
+        # Detect rear passenger attire
+        r_hsv = cv2.cvtColor(rear_roi, cv2.COLOR_BGR2HSV)
+        r_col, r_hex = classify_dominant_color(r_hsv)
+        clean_r_col = r_col.replace("_", " ").title() + " Attire"
+        rear_count = 2 if rear_edges > 0.19 else 1
+        for r_idx in range(rear_count):
+            pos_name = "Rear Left" if r_idx == 0 else "Rear Right"
+            rear_passengers.append({
+                "seat": pos_name,
+                "role": f"Rear Passenger #{r_idx + 1}",
+                "attire": clean_r_col,
+                "hex": r_hex,
+                "status": "Occupied"
+            })
+    else:
+        rear_count = 0
 
-    # 3. Driving Telemetry & Kinematics Signature
+    # Total People Inside Car Calculation
+    total_people = 1 + (1 if has_front_passenger else 0) + rear_count
+
+    # Structured Seat Map Layout
+    seat_map = [
+        {"seat": "Front-Right (Driver)", "role": "Driver", "occupied": True, "attire": clean_d_col, "hex": d_hex},
+        {"seat": "Front-Left (Co-Driver)", "role": "Front Passenger", "occupied": has_front_passenger, "attire": clean_p_col, "hex": p_hex if has_front_passenger else "#475569"},
+        {"seat": "Rear-Left", "role": "Rear Passenger", "occupied": rear_count >= 1, "attire": rear_passengers[0]["attire"] if rear_count >= 1 else "Empty", "hex": rear_passengers[0]["hex"] if rear_count >= 1 else "#475569"},
+        {"seat": "Rear-Right", "role": "Rear Passenger", "occupied": rear_count >= 2, "attire": rear_passengers[1]["attire"] if rear_count >= 2 else "Empty", "hex": rear_passengers[1]["hex"] if rear_count >= 2 else "#475569"}
+    ]
+
+    # 4. Driving Telemetry & Kinematics Signature
     speed = float(speed_kmph) if speed_kmph > 0 else 44.0
     if speed >= 58.0:
         driving_style = f"Aggressive Highway Pace ({int(speed)} km/h & Fast Lane Bias)"
@@ -311,16 +344,28 @@ def extract_in_cabin_profile(crop_img, vehicle_type="Car", body_subtype="Sedan",
     else:
         driving_style = f"Steady Arterial Cruise ({int(speed)} km/h Center Lane)"
 
-    # 4. Twin-Disambiguation Fingerprint
-    occ_str = "Solo Driver" if occupant_cnt == 1 else "Driver + Front Co-Passenger"
-    twin_fingerprint = f"Differentiated from identical showroom models via {occ_str.lower()} in {clean_d_col.lower()}, {dash_str.lower()}, and {driving_style.lower()}."
+    # 5. Twin-Disambiguation Fingerprint
+    if total_people == 1:
+        occ_desc = "Solo Driver"
+    elif total_people == 2:
+        occ_desc = f"2 People (Driver + Front Passenger in {clean_p_col.lower()})"
+    else:
+        occ_desc = f"{total_people} People Inside (Driver + Front Passenger + {rear_count} Rear Passengers)"
+
+    twin_fingerprint = f"Differentiated from identical showroom models via {occ_desc.lower()} in {clean_d_col.lower()}, {dash_str.lower()}, and {driving_style.lower()}."
 
     return {
-        "occupant_count": occupant_cnt,
+        "occupant_count": total_people,
+        "total_people_count": total_people,
         "driver_attire": clean_d_col,
         "driver_attire_hex": d_hex,
         "passenger_attire": clean_p_col,
-        "passenger_attire_hex": p_hex if has_passenger else "#64748B",
+        "passenger_attire_hex": p_hex if has_front_passenger else "#64748B",
+        "has_front_passenger": has_front_passenger,
+        "rear_passenger_count": rear_count,
+        "rear_passengers": rear_passengers,
+        "seat_map": seat_map,
+        "occupants_summary": occ_desc,
         "dashboard_items": dash_str,
         "dashboard_confidence": 0.91,
         "driving_style": driving_style,
@@ -404,6 +449,10 @@ def extract_vehicle_profile(crop_img, vehicle_type="Car", speed_kmph=0.0):
         "runner_up": make_model.get("runner_up"),
         # In-Cabin & Dashboard Disambiguation fields
         "occupant_count": cabin_profile["occupant_count"],
+        "total_people_count": cabin_profile.get("total_people_count", cabin_profile["occupant_count"]),
+        "occupants_summary": cabin_profile.get("occupants_summary", f"{cabin_profile['occupant_count']} People"),
+        "seat_map": cabin_profile.get("seat_map", []),
+        "rear_passengers": cabin_profile.get("rear_passengers", []),
         "driver_attire": cabin_profile["driver_attire"],
         "driver_attire_hex": cabin_profile["driver_attire_hex"],
         "passenger_attire": cabin_profile["passenger_attire"],

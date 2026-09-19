@@ -1144,10 +1144,10 @@ async function openInspectModal(d){
     // In-Cabin & Dashboard Deep Disambiguation Profiling
     const cabinEl = document.getElementById('unplated-cabin');
     if(cabinEl){
-      const occText = prof.occupant_count > 1 ? `${prof.occupant_count} Occupants` : 'Solo Driver';
+      const occText = prof.occupants_summary || (prof.occupant_count > 1 ? `${prof.occupant_count} People Inside (Driver + ${prof.occupant_count - 1} Passengers)` : '1 Person (Solo Driver)');
       const drvText = prof.driver_attire || 'Dark Attire';
-      const passText = prof.passenger_attire && prof.passenger_attire !== 'None' && prof.passenger_attire !== 'Solo Rider' ? ` | Passenger: ${prof.passenger_attire}` : '';
-      cabinEl.innerHTML = `<b style="color:#f8fafc">${occText}</b> &mdash; Driver: <span style="color:#a5b4fc">${drvText}</span>${passText}`;
+      const passText = prof.passenger_attire && prof.passenger_attire !== 'None' && prof.passenger_attire !== 'Solo Rider' ? ` | Co-Driver: ${prof.passenger_attire}` : '';
+      cabinEl.innerHTML = `<b style="color:#38bdf8">${occText}</b> &mdash; Driver: <span style="color:#a5b4fc">${drvText}</span>${passText}`;
     }
     const dashEl = document.getElementById('unplated-dashboard');
     if(dashEl){

@@ -71,6 +71,21 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
     }
   }
 
+  // Global Escape key listener to close modals inside the tracking map iframe
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === "Escape" || e.keyCode === 27) {
+        try {
+          if (iframeRef.current && iframeRef.current.contentWindow) {
+            iframeRef.current.contentWindow.postMessage({ type: "CLOSE_MODALS" }, "*");
+          }
+        } catch (err) {}
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <div className="vt-container">
       {/* Top Header Navigation */}
@@ -91,7 +106,14 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
         <div className="vt-tabs">
           <button
             className={`vt-tab-btn ${activeTab === "map" ? "active" : ""}`}
-            onClick={() => setActiveTab("map")}
+            onClick={() => {
+              setActiveTab("map");
+              try {
+                if (iframeRef.current && iframeRef.current.contentWindow) {
+                  iframeRef.current.contentWindow.postMessage({ type: "CLOSE_MODALS" }, "*");
+                }
+              } catch (e) {}
+            }}
           >
             <i className="fas fa-map-location-dot" />
             <span>Tracking Map</span>
@@ -107,6 +129,24 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
 
         {/* Action Switchers */}
         <div className="vt-actions">
+          {activeTab === "map" && (
+            <button
+              className="vt-btn"
+              style={{ background: "#dc2626", color: "#fff", border: "1px solid #ef4444", fontWeight: 700 }}
+              onClick={() => {
+                try {
+                  if (iframeRef.current && iframeRef.current.contentWindow) {
+                    iframeRef.current.contentWindow.postMessage({ type: "CLOSE_MODALS" }, "*");
+                  }
+                } catch (e) {}
+              }}
+              title="Close any open modal or inspect view and return to map (Esc)"
+            >
+              <i className="fas fa-xmark" />
+              <span>Close / Back (Esc)</span>
+            </button>
+          )}
+
           {onSwitchToTraffic && (
             <button className="vt-btn vt-traffic-btn" onClick={onSwitchToTraffic} title="Direct Switch to Urban Traffic Management">
               <i className="fas fa-traffic-light" />

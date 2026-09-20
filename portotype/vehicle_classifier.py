@@ -35,18 +35,44 @@ def analyze_grille_architecture(grille_crop):
     gh, gw = grille_crop.shape[:2]
     gray = cv2.cvtColor(grille_crop, cv2.COLOR_BGR2GRAY)
 
-    # 1. Circle Emblem Detection (Hough Transform)
+    # 1. Bright Metallic / Chrome Specular Reflection Density
+    _, chrome_mask = cv2.threshold(gray, 175, 255, cv2.THRESH_BINARY)
+    chrome_density = float(np.sum(chrome_mask > 0)) / max(1.0, float(gray.size))
+
+    # 2. Geometric Emblem Contour Fitting (Oval vs Circle vs Star)
+    contours, _ = cv2.findContours(chrome_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    has_oval = False
+    has_circle_shape = False
+
+    for cnt in contours:
+        if len(cnt) >= 5:
+            area = cv2.contourArea(cnt)
+            if 140 < area < (gh * gw * 0.40):
+                ellipse = cv2.fitEllipse(cnt)
+                (cx, cy), (ma, Ma), angle = ellipse
+                major = max(ma, Ma)
+                minor = max(min(ma, Ma), 1.0)
+                ellipse_ar = major / minor
+                is_centered = abs((cx / max(1, gw)) - 0.5) < 0.28
+
+                if is_centered:
+                    # Hyundai / Toyota / Ford oval emblem (aspect 1.35 to 2.6)
+                    if 1.35 <= ellipse_ar <= 2.6:
+                        has_oval = True
+                    elif 0.88 <= ellipse_ar <= 1.25:
+                        has_circle_shape = True
+
+    # Hough circle fallback only if no oval found
     min_r = max(8, int(min(gh, gw) * 0.06))
     max_r = max(18, int(min(gh, gw) * 0.28))
     circles = cv2.HoughCircles(
         gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=20,
         param1=50, param2=28, minRadius=min_r, maxRadius=max_r
     )
-    has_circle = circles is not None and len(circles) > 0
+    has_circle = (circles is not None and len(circles) > 0) or has_circle_shape
 
-    # 2. Chrome / Bright Metallic Specular Reflection Density
-    _, chrome_mask = cv2.threshold(gray, 185, 255, cv2.THRESH_BINARY)
-    chrome_density = float(np.sum(chrome_mask > 0)) / max(1.0, float(gray.size))
+    # True 3-pointed star only if circle detected AND NOT an oval emblem
+    has_star = has_circle and not has_oval and chrome_density > 0.16
 
     # 3. Horizontal vs. Vertical Edge Directionality (Sobel Filters)
     sobel_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
@@ -58,7 +84,7 @@ def analyze_grille_architecture(grille_crop):
     vert_ratio = vert_energy / total_energy
     horiz_ratio = horiz_energy / total_energy
 
-    # 4. BMW Kidney Grille Symmetry Check (split left/right pod darkness)
+    # 4. BMW Kidney Grille Symmetry Check
     mid_w = gw // 2
     left_pod = gray[:, :mid_w - 5]
     right_pod = gray[:, mid_w + 5:]
@@ -70,20 +96,23 @@ def analyze_grille_architecture(grille_crop):
 
     # 5. Determine Grille Type
     detected_type = catalog.GRILLE_HONEYCOMB_HEX
-    if is_kidney_like and vert_ratio > 0.48:
+    if has_oval:
+        detected_type = catalog.GRILLE_PARAMETRIC_JEWEL
+    elif is_kidney_like and vert_ratio > 0.48:
         detected_type = catalog.GRILLE_KIDNEY_DUAL
-    elif vert_ratio > 0.58 and chrome_density > 0.06:
+    elif vert_ratio > 0.58 and chrome_density > 0.08:
         detected_type = catalog.GRILLE_VERTICAL_SLATS
-    elif has_circle and horiz_ratio > 0.45 and chrome_density > 0.05:
+    elif has_circle and not has_oval and horiz_ratio > 0.45 and chrome_density > 0.08:
         detected_type = catalog.GRILLE_CHROME_LOUVER
-    elif horiz_ratio > 0.52 and chrome_density > 0.12:
+    elif horiz_ratio > 0.52 and chrome_density > 0.14:
         detected_type = catalog.GRILLE_SINGLEFRAME_HEX
-    elif has_circle and chrome_density > 0.04:
+    elif has_star:
         detected_type = catalog.GRILLE_PANAMERICANA_STAR
 
     return {
-        "has_circle_emblem": has_circle,
-        "has_star_emblem": has_circle and chrome_density > 0.06,
+        "has_oval_emblem": has_oval,
+        "has_circle_emblem": has_circle and not has_oval,
+        "has_star_emblem": has_star,
         "chrome_density": round(chrome_density, 3),
         "vertical_edge_ratio": round(vert_ratio, 3),
         "horizontal_edge_ratio": round(horiz_ratio, 3),
@@ -109,10 +138,12 @@ def classify_vehicle(crop_img, aspect_ratio, dominant_color, body_subtype):
         }
 
     h, w = crop_img.shape[:2]
-    # Isolate front fascia / grille zone
-    gy1, gy2 = int(h * 0.35), int(h * 0.65)
-    gx1, gx2 = int(w * 0.22), int(w * 0.78)
+    # Isolate front fascia / grille zone (upper to mid-section)
+    gy1, gy2 = int(h * 0.10), int(h * 0.65)
+    gx1, gx2 = int(w * 0.18), int(w * 0.82)
     grille_crop = crop_img[gy1:gy2, gx1:gx2]
+    if grille_crop.size == 0:
+        grille_crop = crop_img
 
     cues = analyze_grille_architecture(grille_crop)
     all_models = catalog.get_catalog()
@@ -126,6 +157,8 @@ def classify_vehicle(crop_img, aspect_ratio, dominant_color, body_subtype):
         # Cue 1: Grille Architecture & Emblem Match (Weight: 35%)
         if cand["grille_type"] == cues["detected_grille_type"]:
             score += 0.35
+        elif cues.get("has_oval_emblem") and cand["emblem_shape"] == catalog.EMBLEM_OVAL:
+            score += 0.35
         elif cues["has_circle_emblem"] and cand["emblem_shape"] == catalog.EMBLEM_CIRCLE:
             score += 0.28
         elif cues["has_star_emblem"] and cand["emblem_shape"] == catalog.EMBLEM_STAR_3:
@@ -133,7 +166,7 @@ def classify_vehicle(crop_img, aspect_ratio, dominant_color, body_subtype):
         elif cues["detected_grille_type"] == catalog.GRILLE_VERTICAL_SLATS and cand["make"] in ["Mahindra", "Jeep"]:
             score += 0.33
         elif cues["detected_grille_type"] == catalog.GRILLE_PARAMETRIC_JEWEL and cand["make"] == "Hyundai":
-            score += 0.34
+            score += 0.35
         elif cues["detected_grille_type"] == catalog.GRILLE_TIGER_NOSE and cand["make"] == "Kia":
             score += 0.34
         elif cues["detected_grille_type"] == catalog.GRILLE_HUMANITY_LINE and cand["make"] == "Tata Motors":
@@ -145,7 +178,7 @@ def classify_vehicle(crop_img, aspect_ratio, dominant_color, body_subtype):
         elif cues["detected_grille_type"] == catalog.GRILLE_BUTTERFLY_RIBBED and cand["make"] == "Skoda":
             score += 0.33
         else:
-            score += 0.12
+            score += 0.10
 
         # Cue 2: Proportions & Aspect Ratio Match (Weight: 30%)
         ar_min, ar_max = cand["aspect_ratio"]

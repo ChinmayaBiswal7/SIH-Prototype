@@ -604,10 +604,18 @@ def upload_and_process_anpr():
     results = _upload_yolo_model.track(frame, persist=True, tracker="botsort.yaml", conf=0.18, verbose=False)
     plates = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
 
-    # Fallback: if YOLO pipeline found nothing (close-up, cropped, or plate-only image),
+    # Fallback: if YOLO pipeline found nothing OR only unreadable/missing plate placeholders,
     # run scan_frame_for_plates which uses multi-pass CLAHE OCR directly on the full frame
-    if not plates:
-        plates = anpr_module.scan_frame_for_plates(frame)
+    has_valid_plate = any(
+        p.get("violation") != "MISSING_OR_COVERED_PLATE"
+        and "NO PLATE" not in p.get("plate", "")
+        and "UNREADABLE" not in p.get("plate", "")
+        for p in (plates or [])
+    )
+    if not plates or not has_valid_plate:
+        scan_plates = anpr_module.scan_frame_for_plates(frame)
+        if scan_plates:
+            plates = scan_plates
 
     annotated = anpr_module.annotate_frame(frame, plates)
 
@@ -798,15 +806,13 @@ def _process_video_background(job_id, temp_vpath, timestamp):
         stream_stats = {}
         frame_idx   = 0
         sampled_count = 0
-        max_sampled   = 30          # Comprehensive multi-vehicle sampling across video
+        max_sampled   = 6           # Rapid keyframe sampling for sub-second/real-time video scanning
         last_frame    = None
 
-        total_vid_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 300
+        total_vid_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 180
         step = max(1, total_vid_frames // max_sampled)
         effective_max = min(max_sampled, max(1, total_vid_frames // step))
         update_job(total_frames=total_vid_frames, step=step)
-
-
 
         while cap.isOpened() and sampled_count < max_sampled:
             ret, f = cap.read()
@@ -816,10 +822,10 @@ def _process_video_background(job_id, temp_vpath, timestamp):
             if step > 1 and frame_idx % step != 0:
                 continue
 
-            # Downscale oversized frames
-            if f.shape[1] > 960:
-                scale = 960.0 / f.shape[1]
-                f = cv2.resize(f, (960, int(f.shape[0] * scale)), interpolation=cv2.INTER_AREA)
+            # Downscale for ultra-fast YOLO and OCR inference
+            if f.shape[1] > 720:
+                scale = 720.0 / f.shape[1]
+                f = cv2.resize(f, (720, int(f.shape[0] * scale)), interpolation=cv2.INTER_AREA)
 
             sampled_count += 1
             last_frame = f
@@ -831,6 +837,17 @@ def _process_video_background(job_id, temp_vpath, timestamp):
 
             plates = anpr_module.detect_plates_in_frame(f, results, fast_mode=True)
 
+            # Fallback: if detect_plates_in_frame found no valid plate, run scan_frame_for_plates on frame
+            has_valid = any(
+                p.get("violation") != "MISSING_OR_COVERED_PLATE"
+                and "NO PLATE" not in p.get("plate", "")
+                and "UNREADABLE" not in p.get("plate", "")
+                for p in (plates or [])
+            )
+            if not plates or not has_valid:
+                v_scans = anpr_module.scan_frame_for_plates(f)
+                if v_scans:
+                    plates = v_scans
 
             if plates:
                 for p in plates:
@@ -1002,7 +1019,7 @@ def _process_video_background(job_id, temp_vpath, timestamp):
 
         # Last-resort full-frame scan if nothing found
         if not out_records and last_frame is not None:
-            plates = anpr_module.detect_plates_in_frame(last_frame, None)
+            plates = anpr_module.scan_frame_for_plates(last_frame)
             for p in plates:
                 plate = p["plate"]
                 if plate in seen_plates:

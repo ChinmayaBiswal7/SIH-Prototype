@@ -254,29 +254,29 @@ VEHICLE_CATALOG = [
     },
     {
         "make": "Hyundai",
-        "model": "i20",
-        "series": "Premium Hatchback",
+        "model": "i20 / i20 N Line",
+        "series": "Sport Hatchback / Turbo N Line",
         "body_style": "Hatchback / Compact Car",
-        "aspect_ratio": (0.95, 1.25),
+        "aspect_ratio": (0.95, 1.88),
         "ground_clearance": "Low-Medium (170 mm)",
         "grille_type": GRILLE_PARAMETRIC_JEWEL,
         "emblem_shape": EMBLEM_OVAL,
         "colors": ["White", "Red", "Silver Grey", "Dark Blue", "Black"],
-        "features": "Gloss Black Cascading Mesh Grille, Swept-Back Projector Headlamps, Z-Shaped LED Tail Lamps, Low Sleek Aero Stance",
-        "typical_confidence": 0.91
+        "features": "Gloss Black Cascading Parametric Jewel Grille, N Line Badging, Red Contrast Bumper Lip Accents, Swept-Back Projector Headlamps",
+        "typical_confidence": 0.95
     },
     {
         "make": "Hyundai",
         "model": "Verna",
         "series": "Futuristic Fastback Sedan",
         "body_style": "Sedan (Low Stance / Long Profile)",
-        "aspect_ratio": (1.40, 1.85),
+        "aspect_ratio": (1.35, 1.90),
         "ground_clearance": "Medium (165 mm)",
         "grille_type": GRILLE_PARAMETRIC_JEWEL,
         "emblem_shape": EMBLEM_OVAL,
         "colors": ["White", "Black", "Silver Grey", "Red", "Dark Blue"],
         "features": "Horizon-to-Horizon Full Width Seamless LED DRL Bar, Parametric Faceted Body Sides, Fastback Sloping Rear Roofline",
-        "typical_confidence": 0.94
+        "typical_confidence": 0.95
     },
 
     # =========================================================================

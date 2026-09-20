@@ -408,10 +408,10 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
     reader = get_ocr()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img.copy()
 
-    # Resize large crops to max height 140px preserving aspect ratio for sharp OCR inference
+    # Only downscale very large plate crops (preserving aspect ratio for sharp OCR inference)
     gh, gw = gray.shape[:2]
     aspect = gw / max(1, gh)
-    if gh > 140 and (aspect >= 1.6 or gw <= 500):
+    if gh > 180 and aspect >= 2.2:
         scale = 140.0 / gh
         gray = cv2.resize(gray, (int(gw * scale), 140), interpolation=cv2.INTER_AREA)
     elif gw > 1280:
@@ -954,7 +954,16 @@ def detect_plates_in_frame(frame, yolo_results=None, pixels_per_meter=50, fast_m
                 restored  = enhancer.restore_image(veh_crop, telemetry)
                 plate_found, avg_conf = multi_pass_ocr_on_plate(restored, max_passes=ocr_passes)
 
-            # If plate is missing or covered on a prominent vehicle:
+            # Direct multi-strategy scan on vehicle crop before declaring unreadable
+            if not plate_found or avg_conf < 0.45:
+                crop_scans = scan_frame_for_plates(veh_crop)
+                if crop_scans:
+                    valid_scan = next((s for s in crop_scans if s.get("violation") != "MISSING_OR_COVERED_PLATE" and "NO PLATE" not in s.get("plate", "") and "UNREADABLE" not in s.get("plate", "")), None)
+                    if valid_scan:
+                        plate_found = valid_scan["plate"]
+                        avg_conf = max(avg_conf, valid_scan.get("confidence", 0.65))
+
+            # If plate is genuinely missing or covered on a prominent vehicle:
             if not plate_found or avg_conf < 0.45:
                 if not is_narrow_edge_sliver and (bw * bh) > 10000:
                     t_id = track_id if track_id > 0 else (abs(hash(str(vx1))) % 10000)

@@ -199,6 +199,11 @@ html,body{width:100%;height:100%;background:#020617;color:#f8fafc;font-family:-a
         <input type="file" id="vid-upload-input" accept="video/*" style="display:none" onchange="uploadVideoFile(this)"/>
       </label>
 
+      <!-- COLAB GPU STATUS / LINK -->
+      <button class="btn" onclick="configureColab()" style="border-color:#38bdf8;color:#38bdf8" title="Connect Google Colab GPU Cloudflare Tunnel">
+        <i class="fa-solid fa-bolt"></i> Colab GPU
+      </button>
+
       <!-- CLEAR SCAN & RESET DB -->
       <button class="btn danger" onclick="clearLiveScan()" title="Clear backend DB & reset scan"><i class="fa-solid fa-broom"></i> Clear Scan</button>
     </div>
@@ -555,6 +560,24 @@ let pollTimer = null;
 let webcamStream = null;
 let webcamInterval = null;
 let isAnalyzingFrame = false;
+
+async function configureColab() {
+  try {
+    const cur = await fetch(API + '/api/ai_backend').then(r => r.json()).catch(() => ({}));
+    const curUrl = cur.url || '';
+    const newUrl = prompt('Enter your Google Colab Cloudflare URL\n(from your running Colab tunnel, e.g. https://xxxx.trycloudflare.com):\nLeave empty to use Local Neural AI.', curUrl);
+    if (newUrl !== null) {
+      await fetch(API + '/api/ai_backend', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ url: newUrl.trim() })
+      });
+      alert(newUrl.trim() ? 'Google Colab GPU Backend connected:\n' + newUrl.trim() : 'Using Local Neural AI Engine on Server.');
+    }
+  } catch(e) {
+    alert('Error configuring Colab URL: ' + e.message);
+  }
+}
 
 async function stopWebcamIfActive(){
   if(webcamInterval){

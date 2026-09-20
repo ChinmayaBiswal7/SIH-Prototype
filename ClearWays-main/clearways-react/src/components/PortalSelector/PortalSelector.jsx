@@ -12,9 +12,7 @@ export default function PortalSelector({ onSelectPortal, currentUser, onLogout }
       {/* Top Header */}
       <header className="portal-header">
         <div className="portal-brand">
-          <div className="portal-logo-icon">
-            <i className="fas fa-network-wired" />
-          </div>
+          <img src="/velociti_logo.png" alt="VeloCiTI Logo" className="portal-logo-img" />
           <div>
             <h1 className="portal-title">VeloCiTI Command Nexus</h1>
             <p className="portal-subtitle">Bhubaneswar Smart City Integrated Traffic & Security Grid</p>

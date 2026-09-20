@@ -21,8 +21,11 @@ export default function TopBar({ currentView, intersection, stats, currentUser, 
   return (
     <header className="topbar">
       <div className="tb-left">
-        <h1>{currentView==="detail" && intersection ? intersection.name : title}</h1>
-        <div className="tb-sub">{currentView==="detail" && intersection ? `ID: ${intersection.id}` : sub}</div>
+        <img src="/velociti_logo.png" alt="VeloCiTI" className="tb-logo-img" />
+        <div>
+          <h1>{currentView==="detail" && intersection ? intersection.name : title}</h1>
+          <div className="tb-sub">{currentView==="detail" && intersection ? `ID: ${intersection.id}` : sub}</div>
+        </div>
       </div>
       <div className="tb-right">
         {onSwitchToTracking && (

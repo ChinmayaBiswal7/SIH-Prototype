@@ -52,7 +52,7 @@ export default function LoginScreen({ onLoginSuccess }) {
         {/* Top Emblem & Header */}
         <div className="login-header">
           <div className="login-emblem">
-            <i className="fas fa-shield-halved" />
+            <img src="/velociti_logo.png" alt="VeloCiTI Logo" className="login-emblem-img" />
           </div>
           <div className="login-badge-pill">
             <span className="live-dot" />

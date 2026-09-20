@@ -188,6 +188,10 @@ tr:hover td{background:#1a2640;cursor:pointer}
 <div id="map"></div>
 
 <div class="top-bar">
+  <div style="display:flex;align-items:center;gap:9px;margin-right:12px;flex-shrink:0;">
+    <img src="/static/velociti_logo.png" style="width:34px;height:34px;border-radius:50%;background:#fff;object-fit:cover;box-shadow:0 0 10px rgba(56,189,248,0.4);border:1px solid rgba(56,189,248,0.3);" alt="VeloCiTI Logo" onerror="this.src='/velociti_logo.png'"/>
+    <span style="font-weight:800;font-size:0.95rem;color:#f8fafc;letter-spacing:0.02em;">Velo<span style="color:#38bdf8">CiTI</span></span>
+  </div>
   <div class="search-inline">
     <input id="pin" type="text" placeholder="Search plate (e.g. OD05XX9999)"
            oninput="onType(this.value)" onkeydown="if(event.key==='Enter')doTrack()"/>

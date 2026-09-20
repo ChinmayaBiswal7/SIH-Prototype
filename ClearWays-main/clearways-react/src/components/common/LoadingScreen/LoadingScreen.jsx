@@ -32,9 +32,11 @@ export default function LoadingScreen({ onComplete }) {
   return (
     <div className="ls">
       <div className="ls-box">
-        <i className="fas fa-traffic-light ls-icon" />
-        <div className="ls-title">Clear<span>Ways</span></div>
-        <div className="ls-sub">Traffic Headquarters</div>
+        <div className="ls-logo-container">
+          <img src="/velociti_logo.png" alt="VeloCiTI" className="ls-logo-img" />
+        </div>
+        <div className="ls-title">Velo<span>CiTI</span></div>
+        <div className="ls-sub">Vehicle Location &amp; City Traffic Intelligence</div>
         <div className="ls-bar-wrap"><div className="ls-bar" style={{ width: `${pct}%` }} /></div>
         <div className="ls-msg">{STEPS[msgIdx]}</div>
       </div>

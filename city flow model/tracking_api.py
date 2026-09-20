@@ -929,7 +929,7 @@ def register_tracking_routes(app):
                         v_resp = requests.post(
                             f"{ai_backend}/predict_video",
                             files={"file": (f"upload_{job_id}.mp4", vf, "video/mp4")},
-                            timeout=(6, 180)
+                            timeout=(4, 25)
                         )
                     if v_resp.status_code == 200:
                         v_json = v_resp.json()

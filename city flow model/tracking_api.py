@@ -950,132 +950,132 @@ def register_tracking_routes(app):
                                 timeout=(2.5, 15)
                             )
                         if v_resp.status_code == 200:
-                        v_json = v_resp.json()
-                        if v_json.get("success") and v_json.get("vehicles"):
-                            # Open uploaded video to extract high-resolution keyframes for visual annotation
-                            v_cap = None
-                            v_total_f = 30
-                            try:
-                                import cv2
-                                v_cap = cv2.VideoCapture(temp_vpath)
-                                v_total_f = int(v_cap.get(cv2.CAP_PROP_FRAME_COUNT)) if v_cap.isOpened() else 30
-                                if v_total_f <= 0:
-                                    v_total_f = 30
-                            except Exception:
-                                pass
-
-                            for idx, v in enumerate(v_json["vehicles"]):
-                                v_plate = v.get("plate")
-                                v_has = v.get("has_plate", False)
-                                v_viol = v.get("violation", "NONE" if v_has else "MISSING_OR_COVERED_PLATE")
-                                v_type = v.get("vehicle_type", "CAR")
-                                v_conf = float(v.get("confidence", 0.94 if v_has else 0.0))
-
-                                snap_name = f"cctv_{job_id}_{idx}.jpg"
-                                snap_path = os.path.join(SNAPSHOT_DIR, snap_name)
-                                snap_url = f"/api/snapshot/{snap_name}"
-
-                                # Extract keyframe from video corresponding to this vehicle
-                                ann_frame = None
-                                if v_cap and v_cap.isOpened():
-                                    target_pos = int(min(v_total_f - 1, max(1, (idx + 1) * (v_total_f // (len(v_json["vehicles"]) + 1)))))
-                                    v_cap.set(cv2.CAP_PROP_POS_FRAMES, target_pos)
-                                    ret, raw_vf = v_cap.read()
-                                    if ret and raw_vf is not None:
-                                        ann_frame = raw_vf
-
-                                if v_has and v_plate and "NO PLATE" not in v_plate:
-                                    v_clean = v_plate.upper().replace(" ", "")
-                                    v_rto = {}
-                                    try:
-                                        import rto
-                                        v_rto = rto.lookup_rto_vehicle(v_clean)
-                                    except Exception:
-                                        pass
-                                    v_prof = None
-                                    if ann_frame is not None:
+                            v_json = v_resp.json()
+                            if v_json.get("success") and v_json.get("vehicles"):
+                                # Open uploaded video to extract high-resolution keyframes for visual annotation
+                                v_cap = None
+                                v_total_f = 30
+                                try:
+                                    import cv2
+                                    v_cap = cv2.VideoCapture(temp_vpath)
+                                    v_total_f = int(v_cap.get(cv2.CAP_PROP_FRAME_COUNT)) if v_cap.isOpened() else 30
+                                    if v_total_f <= 0:
+                                        v_total_f = 30
+                                except Exception:
+                                    pass
+    
+                                for idx, v in enumerate(v_json["vehicles"]):
+                                    v_plate = v.get("plate")
+                                    v_has = v.get("has_plate", False)
+                                    v_viol = v.get("violation", "NONE" if v_has else "MISSING_OR_COVERED_PLATE")
+                                    v_type = v.get("vehicle_type", "CAR")
+                                    v_conf = float(v.get("confidence", 0.94 if v_has else 0.0))
+    
+                                    snap_name = f"cctv_{job_id}_{idx}.jpg"
+                                    snap_path = os.path.join(SNAPSHOT_DIR, snap_name)
+                                    snap_url = f"/api/snapshot/{snap_name}"
+    
+                                    # Extract keyframe from video corresponding to this vehicle
+                                    ann_frame = None
+                                    if v_cap and v_cap.isOpened():
+                                        target_pos = int(min(v_total_f - 1, max(1, (idx + 1) * (v_total_f // (len(v_json["vehicles"]) + 1)))))
+                                        v_cap.set(cv2.CAP_PROP_POS_FRAMES, target_pos)
+                                        ret, raw_vf = v_cap.read()
+                                        if ret and raw_vf is not None:
+                                            ann_frame = raw_vf
+    
+                                    if v_has and v_plate and "NO PLATE" not in v_plate:
+                                        v_clean = v_plate.upper().replace(" ", "")
+                                        v_rto = {}
                                         try:
-                                            import vehicle_profiler
-                                            v_prof = vehicle_profiler.extract_vehicle_profile(ann_frame, vehicle_type=v_type)
+                                            import rto
+                                            v_rto = rto.lookup_rto_vehicle(v_clean)
                                         except Exception:
                                             pass
-                                    type_str = f"{v_rto.get('vehicle_maker', '')} {v_rto.get('vehicle_model', '')}".strip()
-                                    if not type_str and v_prof and v_prof.get("estimated_make"):
-                                        type_str = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
-                                    rec = {
-                                        "plate": v_clean,
-                                        "confidence": v_conf,
-                                        "vehicle_type": type_str or v_type,
-                                        "camera_id": "CAM_CCTV_STREAM",
-                                        "image_path": snap_url,
-                                        "timestamp": timestamp,
-                                        "last_seen": timestamp,
-                                        "category": "Private Vehicle",
-                                        "plate_color": "WHITE",
-                                        "violation": "NONE",
-                                        "vahan_details": v_rto,
-                                        "vehicle_profile": v_prof,
-                                        "voting_details": {"frames_analyzed": 12, "confidence_boost": "+11.5% (GPU Video Consensus)"}
-                                    }
-                                else:
-                                    rand_id = random.randint(1000, 9999)
-                                    ghost_id = v_plate or f"UNPLATED-CCTV-{rand_id}"
-                                    v_prof = None
-                                    if ann_frame is not None:
+                                        v_prof = None
+                                        if ann_frame is not None:
+                                            try:
+                                                import vehicle_profiler
+                                                v_prof = vehicle_profiler.extract_vehicle_profile(ann_frame, vehicle_type=v_type)
+                                            except Exception:
+                                                pass
+                                        type_str = f"{v_rto.get('vehicle_maker', '')} {v_rto.get('vehicle_model', '')}".strip()
+                                        if not type_str and v_prof and v_prof.get("estimated_make"):
+                                            type_str = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
+                                        rec = {
+                                            "plate": v_clean,
+                                            "confidence": v_conf,
+                                            "vehicle_type": type_str or v_type,
+                                            "camera_id": "CAM_CCTV_STREAM",
+                                            "image_path": snap_url,
+                                            "timestamp": timestamp,
+                                            "last_seen": timestamp,
+                                            "category": "Private Vehicle",
+                                            "plate_color": "WHITE",
+                                            "violation": "NONE",
+                                            "vahan_details": v_rto,
+                                            "vehicle_profile": v_prof,
+                                            "voting_details": {"frames_analyzed": 12, "confidence_boost": "+11.5% (GPU Video Consensus)"}
+                                        }
+                                    else:
+                                        rand_id = random.randint(1000, 9999)
+                                        ghost_id = v_plate or f"UNPLATED-CCTV-{rand_id}"
+                                        v_prof = None
+                                        if ann_frame is not None:
+                                            try:
+                                                import vehicle_profiler
+                                                v_prof = vehicle_profiler.extract_vehicle_profile(ann_frame, vehicle_type="Car")
+                                            except Exception:
+                                                pass
+                                        u_type = v_type
+                                        if v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
+                                            u_type = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
+                                        elif v_prof and v_prof.get("body_subtype"):
+                                            u_type = v_prof.get("body_subtype")
+                                        rec = {
+                                            "plate": f"{ghost_id} (NO PLATE)" if "NO PLATE" not in ghost_id else ghost_id,
+                                            "confidence": 0.0,
+                                            "vehicle_type": u_type,
+                                            "camera_id": "CAM_CCTV_STREAM",
+                                            "image_path": snap_url,
+                                            "timestamp": timestamp,
+                                            "last_seen": timestamp,
+                                            "category": "Violation / Missing Plate",
+                                            "plate_color": "GREY",
+                                            "violation": "MISSING_OR_COVERED_PLATE",
+                                            "ghost_info": {"ghost_id": ghost_id, "is_new": True, "profile": v_prof},
+                                            "vehicle_profile": v_prof,
+                                            "voting_details": {"frames_analyzed": 12, "confidence_boost": "+14.0% (Video Forensic Re-ID)"}
+                                        }
+    
+                                    # 🟢 Save snapshot: direct base64 image from Colab GPU or annotated keyframe
+                                    if v.get("image_data") and "base64," in v["image_data"]:
                                         try:
-                                            import vehicle_profiler
-                                            v_prof = vehicle_profiler.extract_vehicle_profile(ann_frame, vehicle_type="Car")
-                                        except Exception:
+                                            import base64
+                                            raw_b64 = v["image_data"].split("base64,")[1]
+                                            v_bytes = base64.b64decode(raw_b64)
+                                            save_session_snapshot(snap_name, v_bytes)
+                                            with open(snap_path, "wb") as sf:
+                                                sf.write(v_bytes)
+                                        except Exception as b_err:
                                             pass
-                                    u_type = v_type
-                                    if v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
-                                        u_type = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
-                                    elif v_prof and v_prof.get("body_subtype"):
-                                        u_type = v_prof.get("body_subtype")
-                                    rec = {
-                                        "plate": f"{ghost_id} (NO PLATE)" if "NO PLATE" not in ghost_id else ghost_id,
-                                        "confidence": 0.0,
-                                        "vehicle_type": u_type,
-                                        "camera_id": "CAM_CCTV_STREAM",
-                                        "image_path": snap_url,
-                                        "timestamp": timestamp,
-                                        "last_seen": timestamp,
-                                        "category": "Violation / Missing Plate",
-                                        "plate_color": "GREY",
-                                        "violation": "MISSING_OR_COVERED_PLATE",
-                                        "ghost_info": {"ghost_id": ghost_id, "is_new": True, "profile": v_prof},
-                                        "vehicle_profile": v_prof,
-                                        "voting_details": {"frames_analyzed": 12, "confidence_boost": "+14.0% (Video Forensic Re-ID)"}
-                                    }
-
-                                # 🟢 Save snapshot: direct base64 image from Colab GPU or annotated keyframe
-                                if v.get("image_data") and "base64," in v["image_data"]:
-                                    try:
-                                        import base64
-                                        raw_b64 = v["image_data"].split("base64,")[1]
-                                        v_bytes = base64.b64decode(raw_b64)
-                                        save_session_snapshot(snap_name, v_bytes)
-                                        with open(snap_path, "wb") as sf:
-                                            sf.write(v_bytes)
-                                    except Exception as b_err:
-                                        pass
-                                elif ann_frame is not None:
-                                    try:
-                                        annotated_v = draw_vehicle_annotations(ann_frame, [rec])
-                                        v_bytes = cv2.imencode('.jpg', annotated_v, [int(cv2.IMWRITE_JPEG_QUALITY), 88])[1].tobytes()
-                                        save_session_snapshot(snap_name, v_bytes)
-                                        cv2.imwrite(snap_path, annotated_v)
-                                    except Exception as ann_err:
-                                        print(f"[Tracking API] Video keyframe annotation note: {ann_err}")
-
-                                detected_records.append(rec)
-                                with _cam_lock:
-                                    _latest_live_detections.insert(0, rec)
-
-                            if v_cap:
-                                v_cap.release()
-                            colab_video_done = True
-                            print(f"[AI Backend] Successfully processed video on Colab GPU: {len(detected_records)} vehicles")
+                                    elif ann_frame is not None:
+                                        try:
+                                            annotated_v = draw_vehicle_annotations(ann_frame, [rec])
+                                            v_bytes = cv2.imencode('.jpg', annotated_v, [int(cv2.IMWRITE_JPEG_QUALITY), 88])[1].tobytes()
+                                            save_session_snapshot(snap_name, v_bytes)
+                                            cv2.imwrite(snap_path, annotated_v)
+                                        except Exception as ann_err:
+                                            print(f"[Tracking API] Video keyframe annotation note: {ann_err}")
+    
+                                    detected_records.append(rec)
+                                    with _cam_lock:
+                                        _latest_live_detections.insert(0, rec)
+    
+                                if v_cap:
+                                    v_cap.release()
+                                colab_video_done = True
+                                print(f"[AI Backend] Successfully processed video on Colab GPU: {len(detected_records)} vehicles")
                 except Exception as v_err:
                     print(f"[AI Backend] Colab video processing note: {v_err}, using local fallback")
 

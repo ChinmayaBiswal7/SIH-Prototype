@@ -307,7 +307,23 @@ async def predict_video(file: UploadFile = File(...)):
 from pycloudflared import try_cloudflare
 import requests
 
-port = 8000
+# Free port 8000 from any previous run or dynamically allocate a free port
+os.system("fuser -k 8000/tcp 2>/dev/null || true")
+import socket
+def get_free_port(preferred=8000):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(("0.0.0.0", preferred))
+        s.close()
+        return preferred
+    except Exception:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(("", 0))
+        p = s.getsockname()[1]
+        s.close()
+        return p
+
+port = get_free_port(8000)
 t = try_cloudflare(port=port)
 tunnel_url = getattr(t, "tunnel", None) or getattr(t, "url", None) or str(t)
 if not str(tunnel_url).startswith("http"):

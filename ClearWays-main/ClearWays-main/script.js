@@ -1,4 +1,4 @@
-﻿/* CLEARWAYS NEXUS — COMMAND INTERFACE SCRIPT */
+/* CLEARWAYS NEXUS — COMMAND INTERFACE SCRIPT */
 const bhubaneswarIntersections = ["Jaydev Vihar","Vani Vihar","Master Canteen","Acharya Vihar","Rasulgarh","Kalinga Hospital","Patia Square","Dhauli Square","Sishupalgarh","Khandagiri","Chandrasekharpur","Infocity Square","KIIT Square","Nandankanan","Damana","Palasuni","Bomikhal","Laxmi Sagar","Saheed Nagar","Cuttack Road","Gajapati Nagar","Nayapalli","Bhubaneswar Airport","Capital Hospital","Madhusudan Nagar","Forest Park","Baramunda","Sikharchandi","Mancheswar","Patrapada"];
 const intersections = [];
 for (let i = 0; i < 100; i++) {
@@ -57,19 +57,39 @@ function updateThreeColors() {
 }
 
 function updateSimulation() {
-    intersections.forEach(int => {
+    intersections.forEach((int, i) => {
+        const majorHubs = ["Rasulgarh", "Jaydev Vihar", "Vani Vihar", "Master Canteen", "Acharya Vihar", "Khandagiri", "Patia Square"];
+        const isMajor = majorHubs.some(h => int.name.includes(h));
+        const hash = Math.abs((i * 2654435761) ^ (int.name.length * 37)) % 100;
+        const tier = (isMajor && hash < 42) || hash < 12 ? 'critical' : hash < 50 ? 'medium' : 'low';
+
         int.lanes.forEach(lane => {
-            if (!lane.manualActive) { lane.vehicleCount=Math.floor(Math.random()*115)+5; lane.averageSpeed=Math.floor(Math.random()*58)+10; }
+            if (!lane.manualActive) {
+                let baseVehicles = tier === 'critical' ? 40 + Math.floor(Math.random()*24) : tier === 'medium' ? 20 + Math.floor(Math.random()*16) : 7 + Math.floor(Math.random()*12);
+                let baseSpeed = tier === 'critical' ? 18 + Math.floor(Math.random()*12) : tier === 'medium' ? 33 + Math.floor(Math.random()*13) : 48 + Math.floor(Math.random()*15);
+                if (lane.vehicleCount > 0) {
+                    const delta = lane.light === 'green' ? -(Math.floor(Math.random()*5)+2) : (Math.floor(Math.random()*4)+1);
+                    lane.vehicleCount = Math.max(5, Math.min(78, lane.vehicleCount + delta));
+                    lane.averageSpeed = Math.max(15, Math.min(68, 40 + Math.floor((32 - lane.vehicleCount)*0.4) + (Math.floor(Math.random()*5)-2)));
+                } else {
+                    lane.vehicleCount = baseVehicles;
+                    lane.averageSpeed = baseSpeed;
+                }
+            }
         });
-        const notManual=int.lanes.filter(l=>!l.manualActive);
-        if(notManual.length>0){
-            const maxLane=notManual.reduce((a,b)=>a.vehicleCount>b.vehicleCount?a:b);
-            notManual.forEach(lane=>{ if(lane===maxLane)lane.light='green'; else if(lane.vehicleCount>int.lanes.reduce((s,l)=>s+l.vehicleCount,0)/5)lane.light='yellow'; else lane.light='red'; });
+        const notManual = int.lanes.filter(l => !l.manualActive);
+        if (notManual.length > 0) {
+            const maxLane = notManual.reduce((a,b) => a.vehicleCount > b.vehicleCount ? a : b);
+            notManual.forEach(lane => {
+                if (lane === maxLane) lane.light = 'green';
+                else if (lane.vehicleCount > int.lanes.reduce((s,l)=>s+l.vehicleCount,0)/5) lane.light = 'yellow';
+                else lane.light = 'red';
+            });
         }
-        int.vehicleCount=int.lanes.reduce((s,l)=>s+l.vehicleCount,0);
-        int.averageSpeed=Math.round(int.lanes.reduce((s,l)=>s+l.averageSpeed,0)/int.lanes.length);
-        int.congestionPct=Math.min(100,Math.round((int.vehicleCount/(120*4))*100*2.5));
-        int.status=int.vehicleCount>280?'critical':int.vehicleCount>130?'medium':'low';
+        int.vehicleCount = int.lanes.reduce((s,l) => s + l.vehicleCount, 0);
+        int.averageSpeed = Math.round(int.lanes.reduce((s,l) => s + l.averageSpeed, 0) / int.lanes.length);
+        int.congestionPct = Math.max(12, Math.min(95, Math.round((int.vehicleCount / 200) * 100) + (Math.floor(Math.random()*5)-2)));
+        int.status = int.congestionPct >= 72 ? 'critical' : int.congestionPct >= 40 ? 'medium' : 'low';
     });
     updateGridUI(); updateTopBar(); updateKPIs(); updateThreeColors(); updateTicker();
     if(currentIntersection) refreshDetailData();

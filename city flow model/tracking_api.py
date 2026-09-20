@@ -472,12 +472,21 @@ def register_tracking_routes(app):
         if ai_backend:
             try:
                 import requests
-                # 4s connect, 25s read timeout: prevents 50s freeze when Colab tunnel is expired
-                resp = requests.post(
-                    f"{ai_backend}/predict_image",
-                    files={"file": (filename, raw_bytes, "image/jpeg")},
-                    timeout=(4, 25)
-                )
+                # Fast 1.5s liveness probe: if tunnel is expired, drop immediately to local engine!
+                is_alive = False
+                try:
+                    probe = requests.get(f"{ai_backend}/", timeout=1.5)
+                    if probe.status_code == 200 and probe.json().get("status") == "online":
+                        is_alive = True
+                except Exception:
+                    is_alive = False
+
+                if is_alive:
+                    resp = requests.post(
+                        f"{ai_backend}/predict_image",
+                        files={"file": (filename, raw_bytes, "image/jpeg")},
+                        timeout=(2.0, 8.0)
+                    )
                 if resp.status_code == 200:
                     ai_data = resp.json()
                     if ai_data.get("success"):
@@ -925,13 +934,22 @@ def register_tracking_routes(app):
             if ai_backend and os.path.exists(temp_vpath):
                 try:
                     import requests
-                    with open(temp_vpath, "rb") as vf:
-                        v_resp = requests.post(
-                            f"{ai_backend}/predict_video",
-                            files={"file": (f"upload_{job_id}.mp4", vf, "video/mp4")},
-                            timeout=(4, 25)
-                        )
-                    if v_resp.status_code == 200:
+                    v_alive = False
+                    try:
+                        v_probe = requests.get(f"{ai_backend}/", timeout=1.5)
+                        if v_probe.status_code == 200:
+                            v_alive = True
+                    except Exception:
+                        v_alive = False
+
+                    if v_alive:
+                        with open(temp_vpath, "rb") as vf:
+                            v_resp = requests.post(
+                                f"{ai_backend}/predict_video",
+                                files={"file": (f"upload_{job_id}.mp4", vf, "video/mp4")},
+                                timeout=(2.5, 15)
+                            )
+                        if v_resp.status_code == 200:
                         v_json = v_resp.json()
                         if v_json.get("success") and v_json.get("vehicles"):
                             # Open uploaded video to extract high-resolution keyframes for visual annotation

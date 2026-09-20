@@ -772,17 +772,17 @@ async function uploadImageFile(input){
 
   try{
     let response = await fetch(API + '/api/anpr/upload', {method: 'POST', body: fd});
-    if(!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)){
-      ph.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><div>Connecting to AI Backend (Retrying)...</div>';
-      await new Promise(r => setTimeout(r, 2500));
+    if(!response.ok && (response.status === 429 || response.status === 502 || response.status === 503 || response.status === 504)){
+      ph.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><div>Processing Request (Retrying)...</div>';
+      await new Promise(r => setTimeout(r, 2000));
       response = await fetch(API + '/api/anpr/upload', {method: 'POST', body: fd});
     }
     if(!response.ok){
       const errTxt = await response.text();
-      let errMsg = 'Server returned HTTP ' + response.status;
+      let errMsg = 'Inference server busy (HTTP ' + response.status + '). Retrying momentarily.';
       try { const j = JSON.parse(errTxt); errMsg = j.error || errMsg; } catch(pe){}
-      alert('Upload note: ' + errMsg);
-      resetPlaceholder();
+      ph.innerHTML = '<div style="color:#f87171;font-size:0.9rem;text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> ' + errMsg + '</div>';
+      setTimeout(resetPlaceholder, 4000);
       return;
     }
     const res = await response.json();

@@ -18,7 +18,7 @@ from PIL import Image
 from typing import Optional, List, Dict, Any
 
 # 1. Install & Verify Dependencies
-# !pip install -q fastapi uvicorn python-multipart pycloudflared ultralytics easyocr opencv-python-headless pillow requests
+# !pip install -q fastapi uvicorn python-multipart pycloudflared ultralytics easyocr opencv-python-headless pillow requests nest-asyncio
 
 import torch
 import easyocr
@@ -331,6 +331,8 @@ def run_tunnel_and_server():
     except Exception as e:
         print(f"⚠️ Note on auto-sync: {e}")
 
+    import nest_asyncio
+    nest_asyncio.apply()
     uvicorn.run(app, host="0.0.0.0", port=port)
 
 if __name__ == "__main__":

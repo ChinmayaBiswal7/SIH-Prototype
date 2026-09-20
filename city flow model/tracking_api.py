@@ -165,7 +165,7 @@ def draw_vehicle_annotations(frame, detections):
         print(f"[Tracking API] Annotation error: {ae}")
         return frame
 
-_LIVE_AI_BACKEND_URL = os.environ.get("AI_BACKEND_URL", "https://court-uncertainty-harbor-delegation.trycloudflare.com").strip().rstrip("/")
+_LIVE_AI_BACKEND_URL = os.environ.get("AI_BACKEND_URL", "https://testimony-scheme-quarterly-organisations.trycloudflare.com").strip().rstrip("/")
 
 def get_ai_backend_url():
     global _LIVE_AI_BACKEND_URL

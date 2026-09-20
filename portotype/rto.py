@@ -182,7 +182,15 @@ def lookup_rto_vehicle(plate_number):
     
     # Specific realistic override for Hyundai N-line sample if scanned
     if "TN87" in clean_plate or "5106" in clean_plate:
-        v_meta = VEHICLE_CATALOG[0] # Hyundai i20 N-Line
+        hyundai_meta = next((m for m in VEHICLE_CATALOG if m.get("maker") == "Hyundai" and "i20" in m.get("model", "")), None)
+        v_meta = hyundai_meta or {
+            "maker": "Hyundai Motor India",
+            "model": "i20 N Line Turbo (Starry Night)",
+            "fuel": "Petrol / BS-VI",
+            "class": "Motor Car (LMV)",
+            "cc": "998 cc",
+            "color": "Starry Night Blue"
+        }
         owner = OWNER_NAMES_POOL[0]
     else:
         v_meta = VEHICLE_CATALOG[h % len(VEHICLE_CATALOG)]

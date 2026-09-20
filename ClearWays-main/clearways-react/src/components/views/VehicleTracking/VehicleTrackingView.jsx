@@ -91,13 +91,8 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
       {/* Top Header Navigation */}
       <header className="vt-topbar">
         <div className="vt-left">
-          <img src="/velociti_logo.png" alt="VeloCiTI Logo" className="vt-logo-img" />
-          <div>
-            <div className="vt-title-row">
-              <h1 className="vt-title">VeloCiTI · Vehicle Location &amp; City Traffic Intelligence</h1>
-            </div>
-            <p className="vt-sub">Bhubaneswar Multi-Camera Cross-Junction Journey Reconstruction &amp; Re-ID</p>
-          </div>
+          <img src="/velociti_logo.png" alt="VeloCiTI" className="vt-logo-img" />
+          <h1 className="vt-title" style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, letterSpacing: "0.03em" }}>VeloCiTI</h1>
         </div>
 
         {/* View Tabs */}

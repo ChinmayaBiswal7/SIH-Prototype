@@ -36,7 +36,6 @@ export default function LoadingScreen({ onComplete }) {
           <img src="/velociti_logo.png" alt="VeloCiTI" className="ls-logo-img" />
         </div>
         <div className="ls-title">Velo<span>CiTI</span></div>
-        <div className="ls-sub">Vehicle Location &amp; City Traffic Intelligence</div>
         <div className="ls-bar-wrap"><div className="ls-bar" style={{ width: `${pct}%` }} /></div>
         <div className="ls-msg">{STEPS[msgIdx]}</div>
       </div>

@@ -22,10 +22,11 @@ export default function TopBar({ currentView, intersection, stats, currentUser, 
     <header className="topbar">
       <div className="tb-left">
         <img src="/velociti_logo.png" alt="VeloCiTI" className="tb-logo-img" />
-        <div>
-          <h1>{currentView==="detail" && intersection ? intersection.name : title}</h1>
-          <div className="tb-sub">{currentView==="detail" && intersection ? `ID: ${intersection.id}` : sub}</div>
-        </div>
+        <span style={{ fontWeight: 800, fontSize: "1.1rem", color: "#f8fafc", letterSpacing: "0.03em" }}>VeloCiTI</span>
+        <span style={{ color: "var(--border)", margin: "0 6px" }}>|</span>
+        <h1 style={{ fontSize: "0.86rem", fontWeight: 600, color: "var(--text2)", textTransform: "uppercase", margin: 0 }}>
+          {currentView==="detail" && intersection ? intersection.name : title}
+        </h1>
       </div>
       <div className="tb-right">
         {onSwitchToTracking && (

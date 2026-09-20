@@ -58,10 +58,7 @@ export default function LoginScreen({ onLoginSuccess }) {
             <span className="live-dot" />
             <span>SECURE RESTRICTED TERMINAL</span>
           </div>
-          <h1 className="login-title">VeloCiTI Command HQ</h1>
-          <p className="login-subtitle">
-            Smart Urban Mobility & AI-Driven Green Corridor Platform
-          </p>
+          <h1 className="login-title">VeloCiTI</h1>
         </div>
 
         {/* Security Warning Notice */}
@@ -138,7 +135,7 @@ export default function LoginScreen({ onLoginSuccess }) {
         </form>
 
         <div className="login-sub-footer">
-          <span>End-to-End Cryptographic Security • KIIT Smart India Hackathon Team</span>
+          <span>End-to-End Cryptographic Security • VeloCiTI</span>
         </div>
       </div>
     </div>

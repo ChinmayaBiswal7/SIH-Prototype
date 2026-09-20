@@ -15,10 +15,7 @@ export default function Sidebar({ currentView, onNav, time, date, stats }) {
     <aside className="sidebar">
       <div className="sb-logo">
         <img src="/velociti_logo.png" alt="VeloCiTI" className="sb-logo-img" />
-        <div>
-          <div className="sb-logo-name">Velo<span>CiTI</span></div>
-          <div className="sb-logo-ver">Traffic HQ v2.0</div>
-        </div>
+        <div className="sb-logo-name" style={{ fontSize: "1.15rem", fontWeight: 800 }}>Velo<span>CiTI</span></div>
       </div>
 
       <div className="sb-status">

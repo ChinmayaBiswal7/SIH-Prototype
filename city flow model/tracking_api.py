@@ -117,34 +117,24 @@ def draw_vehicle_annotations(frame, detections):
             is_unplated = "NO PLATE" in p_txt or p.get("violation") == "MISSING_OR_COVERED_PLATE"
 
             if not is_unplated:
-                # 🟢 BRIGHT GREEN MARKER DIRECTLY ON NUMBER PLATE
-                box_col = (34, 197, 94)  # BGR Emerald Green
-                
-                # Check if plate bounding box is known (from GPU or OCR)
+                # 🟢 ONLY outline the exact plate if plate_bbox is known. Never draw awkward boxes on the car!
                 p_box = p.get("plate_bbox")
                 if p_box and list(p_box) not in ([0, 0, w_f, h_f], (0, 0, w_f, h_f)):
                     px1, py1, px2, py2 = p_box
-                    cx1 = max(0, min(w_f - 2, int(px1) - 6))
-                    cy1 = max(0, min(h_f - 2, int(py1) - 6))
-                    cx2 = max(cx1 + 10, min(w_f - 1, int(px2) + 6))
-                    cy2 = max(cy1 + 10, min(h_f - 1, int(py2) + 6))
-                else:
-                    # Bounding box around the car
-                    car_box = p.get("box") or [int(w_f * 0.12), int(h_f * 0.16), int(w_f * 0.88), int(h_f * 0.86)]
-                    cx1, cy1, cx2, cy2 = car_box
-                    cx1 = max(0, min(w_f - 2, int(cx1)))
-                    cy1 = max(0, min(h_f - 2, int(cy1)))
-                    cx2 = max(cx1 + 10, min(w_f - 1, int(cx2)))
-                    cy2 = max(cy1 + 10, min(h_f - 1, int(cy2)))
+                    cx1 = max(0, min(w_f - 2, int(px1) - 4))
+                    cy1 = max(0, min(h_f - 2, int(py1) - 4))
+                    cx2 = max(cx1 + 10, min(w_f - 1, int(px2) + 4))
+                    cy2 = max(cy1 + 10, min(h_f - 1, int(py2) + 4))
 
-                cv2.rectangle(annotated, (cx1, cy1), (cx2, cy2), box_col, 3)
+                    box_col = (34, 197, 94)  # BGR Emerald Green
+                    cv2.rectangle(annotated, (cx1, cy1), (cx2, cy2), box_col, 3)
 
-                # Plate header banner directly atop the plate
-                lbl = f" PLATE: {p_txt} "
-                (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
-                banner_top = max(0, cy1 - lh - 10)
-                cv2.rectangle(annotated, (cx1, banner_top), (min(w_f, cx1 + lw + 12), cy1), box_col, -1)
-                cv2.putText(annotated, lbl, (cx1 + 4, cy1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 2)
+                    # Plate header banner directly atop the plate
+                    lbl = f" PLATE: {p_txt} "
+                    (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
+                    banner_top = max(0, cy1 - lh - 10)
+                    cv2.rectangle(annotated, (cx1, banner_top), (min(w_f, cx1 + lw + 12), cy1), box_col, -1)
+                    cv2.putText(annotated, lbl, (cx1 + 4, cy1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 2)
             else:
                 # 🔴 BRIGHT NEON-RED FORENSIC MARKER FOR UNPLATED SUSPECT VEHICLE
                 box_col = (50, 50, 230)  # BGR Red

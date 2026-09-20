@@ -143,34 +143,17 @@ def draw_plate_annotation(frame: np.ndarray, plate: str, plate_bbox: Optional[Li
     annotated = frame.copy()
     h, w = annotated.shape[:2]
 
+    # ONLY outline the exact plate if plate_bbox is known. Never draw random boxes on the car!
     if plate and plate_bbox:
-        # 🟢 Emerald green marker DIRECTLY on the number plate
         px1, py1, px2, py2 = plate_bbox
-        # Add 6px padding
-        px1 = max(0, px1 - 6)
-        py1 = max(0, py1 - 6)
-        px2 = min(w - 1, px2 + 6)
-        py2 = min(h - 1, py2 + 6)
-
-        box_col = (34, 197, 94)  # BGR Emerald Green
+        px1 = max(0, px1 - 4); py1 = max(0, py1 - 4)
+        px2 = min(w - 1, px2 + 4); py2 = min(h - 1, py2 + 4)
+        box_col = (34, 197, 94)
         cv2.rectangle(annotated, (px1, py1), (px2, py2), box_col, 3)
-
         lbl = f" PLATE: {plate} "
         (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
-        banner_top = max(0, py1 - lh - 10)
-        cv2.rectangle(annotated, (px1, banner_top), (min(w, px1 + lw + 12), py1), box_col, -1)
+        cv2.rectangle(annotated, (px1, max(0, py1 - lh - 10)), (min(w, px1 + lw + 12), py1), box_col, -1)
         cv2.putText(annotated, lbl, (px1 + 4, py1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 2)
-    else:
-        # 🔴 Bright red marker around vehicle for unplated suspect
-        cx1, cy1, cx2, cy2 = car_box
-        box_col = (50, 50, 230)  # BGR Red
-        cv2.rectangle(annotated, (cx1, cy1), (cx2, cy2), box_col, 3)
-
-        lbl = " UNPLATED VEHICLE "
-        (lw, lh), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
-        banner_top = max(0, cy1 - lh - 10)
-        cv2.rectangle(annotated, (cx1, banner_top), (min(w, cx1 + lw + 12), cy1), box_col, -1)
-        cv2.putText(annotated, lbl, (cx1 + 4, cy1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
 
     return annotated
 
@@ -184,8 +167,7 @@ def home():
 @app.post("/predict_image")
 async def predict_image(file: UploadFile = File(...)):
     raw = await file.read()
-    nparr = np.frombuffer(raw, np.uint8)
-    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if frame is None:
         return JSONResponse({"success": False, "error": "Invalid image file"}, status_code=400)
 
@@ -195,35 +177,22 @@ async def predict_image(file: UploadFile = File(...)):
 
     if plate:
         return {
-            "success": True,
-            "has_plate": True,
-            "plate_number": plate,
-            "confidence": round(conf or 0.95, 3),
-            "vehicle_type": "Car",
-            "violation": "NONE",
-            "plate_bbox": plate_bbox,
-            "box": car_box,
-            "image_data": img_b64,
-            "device": DEVICE
+            "success": True, "has_plate": True, "plate_number": plate,
+            "confidence": round(conf or 0.95, 3), "vehicle_type": "Car", "violation": "NONE",
+            "plate_bbox": plate_bbox, "box": car_box, "image_data": img_b64, "device": DEVICE
         }
     else:
         return {
-            "success": True,
-            "has_plate": False,
-            "plate_number": None,
-            "confidence": 0.0,
-            "vehicle_type": "Car",
-            "violation": "MISSING_OR_COVERED_PLATE",
-            "box": car_box,
-            "image_data": img_b64,
-            "device": DEVICE
+            "success": True, "has_plate": False, "plate_number": None, "confidence": 0.0,
+            "vehicle_type": "Car", "violation": "MISSING_OR_COVERED_PLATE",
+            "box": car_box, "image_data": img_b64, "device": DEVICE
         }
 
 @app.post("/predict_video")
 async def predict_video(file: UploadFile = File(...)):
     """
-    Multi-frame video processing: samples 2 frames per second (1 sec = 2 frames),
-    runs YOLO vehicle localization + ANPR OCR on GPU, and returns annotated detections.
+    Multi-frame high-speed video keyframe processing.
+    Directly seeks to 4 keyframe positions across the video for instant 1-2 second inference.
     """
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         tmp.write(await file.read())
@@ -235,51 +204,53 @@ async def predict_video(file: UploadFile = File(...)):
 
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    step = max(1, int(fps / 2.0))  # Exactly 2 frames per second!
+    if total_frames <= 0:
+        total_frames = 60
+
+    num_samples = min(4, total_frames)
+    sample_indices = np.linspace(int(total_frames * 0.1), int(total_frames * 0.9), num_samples, dtype=int)
 
     unique_plates = {}
     unplated_vehicles = []
     sampled_count = 0
 
-    frame_idx = 0
-    while True:
+    for f_idx in sample_indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(f_idx))
         ret, frame = cap.read()
-        if not ret:
-            break
-        if frame_idx % step == 0:
-            sampled_count += 1
-            t_sec = round(frame_idx / fps, 2)
-            plate, conf, plate_bbox, car_box = detect_plate_in_image(frame)
-            if plate:
-                if plate not in unique_plates or conf > unique_plates[plate]["confidence"]:
-                    annotated = draw_plate_annotation(frame, plate, plate_bbox, car_box)
-                    unique_plates[plate] = {
-                        "plate": plate,
-                        "has_plate": True,
-                        "confidence": round(conf or 0.95, 3),
-                        "vehicle_type": "Car",
-                        "violation": "NONE",
-                        "plate_bbox": plate_bbox,
-                        "box": car_box,
-                        "timestamp": t_sec,
-                        "frame_index": frame_idx,
-                        "image_data": frame_to_base64(annotated)
-                    }
-            else:
-                if not unplated_vehicles and sampled_count <= 4:
-                    annotated = draw_plate_annotation(frame, None, None, car_box)
-                    unplated_vehicles.append({
-                        "plate": None,
-                        "has_plate": False,
-                        "confidence": 0.0,
-                        "vehicle_type": "Car",
-                        "violation": "MISSING_OR_COVERED_PLATE",
-                        "box": car_box,
-                        "timestamp": t_sec,
-                        "frame_index": frame_idx,
-                        "image_data": frame_to_base64(annotated)
-                    })
-        frame_idx += 1
+        if not ret or frame is None:
+            continue
+        sampled_count += 1
+        t_sec = round(f_idx / fps, 2)
+        plate, conf, plate_bbox, car_box = detect_plate_in_image(frame)
+        if plate:
+            if plate not in unique_plates or conf > unique_plates[plate]["confidence"]:
+                annotated = draw_plate_annotation(frame, plate, plate_bbox, car_box)
+                unique_plates[plate] = {
+                    "plate": plate,
+                    "has_plate": True,
+                    "confidence": round(conf or 0.95, 3),
+                    "vehicle_type": "Car",
+                    "violation": "NONE",
+                    "plate_bbox": plate_bbox,
+                    "box": car_box,
+                    "timestamp": t_sec,
+                    "frame_index": int(f_idx),
+                    "image_data": frame_to_base64(annotated)
+                }
+        else:
+            if not unplated_vehicles:
+                annotated = draw_plate_annotation(frame, None, None, car_box)
+                unplated_vehicles.append({
+                    "plate": None,
+                    "has_plate": False,
+                    "confidence": 0.0,
+                    "vehicle_type": "Car",
+                    "violation": "MISSING_OR_COVERED_PLATE",
+                    "box": car_box,
+                    "timestamp": t_sec,
+                    "frame_index": int(f_idx),
+                    "image_data": frame_to_base64(annotated)
+                })
 
     cap.release()
     try:
@@ -287,10 +258,7 @@ async def predict_video(file: UploadFile = File(...)):
     except Exception:
         pass
 
-    results = list(unique_plates.values())
-    if not results and unplated_vehicles:
-        results = unplated_vehicles[:1]
-
+    results = list(unique_plates.values()) or unplated_vehicles[:1]
     return {
         "success": True,
         "total": len(results),

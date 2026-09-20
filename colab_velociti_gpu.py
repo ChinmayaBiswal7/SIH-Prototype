@@ -18,7 +18,13 @@ from PIL import Image
 from typing import Optional, List, Dict, Any
 
 # 1. Install & Verify Dependencies
-# !pip install -q fastapi uvicorn python-multipart pycloudflared ultralytics easyocr opencv-python-headless pillow requests nest-asyncio
+import subprocess, sys
+try:
+    import pycloudflared, easyocr, ultralytics, nest_asyncio
+except ImportError:
+    print("📦 Installing required dependencies in Colab (FastAPI, PyCloudflared, Ultralytics, EasyOCR)...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "fastapi", "uvicorn", "python-multipart", "pycloudflared", "ultralytics", "easyocr", "opencv-python-headless", "pillow", "requests", "nest-asyncio"])
+    print("✅ Dependencies installed.")
 
 import torch
 import easyocr
@@ -271,28 +277,45 @@ async def predict_video(file: UploadFile = File(...)):
 # -----------------------------------------------------------------------------
 # Launch Cloudflare Tunnel and Auto-Sync to Render
 # -----------------------------------------------------------------------------
-# Start Cloudflare Tunnel & Auto-Sync to Render
+# -----------------------------------------------------------------------------
+# Clean previous processes, Launch Uvicorn, then Start Tunnel & Auto-Sync
+# -----------------------------------------------------------------------------
 from pycloudflared import try_cloudflare
 import requests
+import threading
 
-# Free port 8000 from any previous run or dynamically allocate a free port
+# 1. Clean up stale processes
+os.system("pkill -9 -f cloudflared 2>/dev/null || true")
+os.system("pkill -9 -f uvicorn 2>/dev/null || true")
 os.system("fuser -k 8000/tcp 2>/dev/null || true")
-import socket
-def get_free_port(preferred=8000):
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(("0.0.0.0", preferred))
-        s.close()
-        return preferred
-    except Exception:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(("", 0))
-        p = s.getsockname()[1]
-        s.close()
-        return p
+time.sleep(0.5)
 
-port = get_free_port(8000)
-t = try_cloudflare(port=port)
+# 2. Start Uvicorn in background thread (isolated event loop)
+def run_uvicorn():
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
+
+server_thread = threading.Thread(target=run_uvicorn, daemon=True)
+server_thread.start()
+
+# 3. Wait for local server to be responsive
+print("⏳ Initializing local VeloCITI server on port 8000...")
+server_ready = False
+for _ in range(30):
+    try:
+        r = requests.get("http://127.0.0.1:8000/", timeout=1)
+        if r.status_code == 200:
+            server_ready = True
+            break
+    except Exception:
+        time.sleep(0.4)
+
+if not server_ready:
+    print("❌ Server failed to start locally on port 8000")
+else:
+    print("✅ Local VeloCITI server is UP and responding!")
+
+# 4. Launch Cloudflare Tunnel pointing to verified local server
+t = try_cloudflare(port=8000)
 tunnel_url = getattr(t, "tunnel", None) or getattr(t, "url", None) or str(t)
 if not str(tunnel_url).startswith("http"):
     m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", str(t))
@@ -310,7 +333,10 @@ try:
 except Exception as e:
     print(f"⚠️ Note on auto-sync: {e}")
 
-# Run Uvicorn natively with Colab's running asyncio loop
-config = uvicorn.Config(app, host="0.0.0.0", port=port, loop="asyncio")
-server = uvicorn.Server(config)
-await server.serve()
+print("\n🔥 VeloCITI AI GPU backend is ready. Streaming requests will appear below.")
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    print("Stopping server...")
+

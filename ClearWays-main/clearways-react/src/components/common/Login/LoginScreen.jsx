@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { login, AUTHORIZED_TEAM_MEMBERS } from '../../../services/authService';
+import { VELOCITI_LOGO } from '../../../assets/velocitiLogo';
 import './LoginScreen.css';
 
 export default function LoginScreen({ onLoginSuccess }) {
@@ -52,7 +53,7 @@ export default function LoginScreen({ onLoginSuccess }) {
         {/* Top Emblem & Header */}
         <div className="login-header">
           <div className="login-emblem">
-            <img src="/velociti_logo.png" alt="VeloCiTI Logo" className="login-emblem-img" />
+            <img src={VELOCITI_LOGO} alt="VeloCiTI" className="login-emblem-img" />
           </div>
           <div className="login-badge-pill">
             <span className="live-dot" />

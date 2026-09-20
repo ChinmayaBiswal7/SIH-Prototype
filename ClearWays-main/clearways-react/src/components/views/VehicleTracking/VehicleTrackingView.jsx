@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { VELOCITI_LOGO } from "../../../assets/velocitiLogo";
 import "./VehicleTrackingView.css";
 
 export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
@@ -91,7 +92,7 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
       {/* Top Header Navigation */}
       <header className="vt-topbar">
         <div className="vt-left">
-          <img src="/velociti_logo.png" alt="VeloCiTI" className="vt-logo-img" />
+          <img src={VELOCITI_LOGO} alt="VeloCiTI" className="vt-logo-img" />
           <h1 className="vt-title" style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, letterSpacing: "0.03em" }}>VeloCiTI</h1>
         </div>
 

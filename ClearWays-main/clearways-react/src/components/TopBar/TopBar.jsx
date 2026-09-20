@@ -1,4 +1,5 @@
 import "./TopBar.css";
+import { VELOCITI_LOGO } from "../../assets/velocitiLogo";
 
 const VIEW_TITLES = {
   overview:  { title:"Traffic Command Matrix",      sub:"Bhubaneswar Metropolitan Area — 10x10 Node Telemetry" },
@@ -21,7 +22,7 @@ export default function TopBar({ currentView, intersection, stats, currentUser, 
   return (
     <header className="topbar">
       <div className="tb-left">
-        <img src="/velociti_logo.png" alt="VeloCiTI" className="tb-logo-img" />
+        <img src={VELOCITI_LOGO} alt="VeloCiTI" className="tb-logo-img" />
         <span style={{ fontWeight: 800, fontSize: "1.1rem", color: "#f8fafc", letterSpacing: "0.03em" }}>VeloCiTI</span>
         <span style={{ color: "var(--border)", margin: "0 6px" }}>|</span>
         <h1 style={{ fontSize: "0.86rem", fontWeight: 600, color: "var(--text2)", textTransform: "uppercase", margin: 0 }}>

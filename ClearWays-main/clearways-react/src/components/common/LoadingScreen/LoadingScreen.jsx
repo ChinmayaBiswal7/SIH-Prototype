@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./LoadingScreen.css";
+import { VELOCITI_LOGO } from "../../../assets/velocitiLogo";
 
 const STEPS = [
   "Connecting to sensors...",
@@ -33,7 +34,7 @@ export default function LoadingScreen({ onComplete }) {
     <div className="ls">
       <div className="ls-box">
         <div className="ls-logo-container">
-          <img src="/velociti_logo.png" alt="VeloCiTI" className="ls-logo-img" />
+          <img src={VELOCITI_LOGO} alt="VeloCiTI" className="ls-logo-img" />
         </div>
         <div className="ls-title">Velo<span>CiTI</span></div>
         <div className="ls-bar-wrap"><div className="ls-bar" style={{ width: `${pct}%` }} /></div>

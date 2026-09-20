@@ -1,4 +1,5 @@
 import "./Sidebar.css";
+import { VELOCITI_LOGO } from "../../assets/velocitiLogo";
 
 const NAV = [
   { id:"overview",  icon:"fa-th",             label:"Matrix Grid" },
@@ -14,7 +15,7 @@ export default function Sidebar({ currentView, onNav, time, date, stats }) {
   return (
     <aside className="sidebar">
       <div className="sb-logo">
-        <img src="/velociti_logo.png" alt="VeloCiTI" className="sb-logo-img" />
+        <img src={VELOCITI_LOGO} alt="VeloCiTI" className="sb-logo-img" />
         <div className="sb-logo-name" style={{ fontSize: "1.15rem", fontWeight: 800 }}>Velo<span>CiTI</span></div>
       </div>
 

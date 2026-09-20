@@ -1,5 +1,6 @@
 import React from "react";
 import "./PortalSelector.css";
+import { VELOCITI_LOGO } from "../../assets/velocitiLogo";
 
 export default function PortalSelector({ onSelectPortal, currentUser, onLogout }) {
   return (
@@ -12,7 +13,7 @@ export default function PortalSelector({ onSelectPortal, currentUser, onLogout }
       {/* Top Header */}
       <header className="portal-header">
         <div className="portal-brand">
-          <img src="/velociti_logo.png" alt="VeloCiTI" className="portal-logo-img" />
+          <img src={VELOCITI_LOGO} alt="VeloCiTI" className="portal-logo-img" />
           <div>
             <h1 className="portal-title">VeloCiTI</h1>
           </div>

@@ -314,18 +314,49 @@ if not server_ready:
 else:
     print("✅ Local VeloCITI server is UP and responding!")
 
-# 4. Launch Cloudflare Tunnel pointing to verified local server
-t = try_cloudflare(port=8000)
-tunnel_url = getattr(t, "tunnel", None) or getattr(t, "url", None) or str(t)
-if not str(tunnel_url).startswith("http"):
-    m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", str(t))
-    if m:
-        tunnel_url = m.group(0)
+# 4. Launch Cloudflare Tunnel with unique log file (guarantees a fresh active URL, never an expired one)
+os.system("pkill -9 -f cloudflared 2>/dev/null || true")
+if not os.path.exists("/usr/local/bin/cloudflared"):
+    print("⬇️ Setting up Cloudflare Tunnel binary...")
+    os.system("curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared")
+
+log_path = f"/tmp/cf_{int(time.time())}.log"
+cf_proc = subprocess.Popen(
+    ["cloudflared", "tunnel", "--url", "http://127.0.0.1:8000", "--logfile", log_path],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL
+)
+
+print("⏳ Connecting fresh Cloudflare Tunnel to edge...")
+tunnel_url = None
+for _ in range(60):
+    time.sleep(0.5)
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r") as f:
+                content = f.read()
+                m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", content)
+                if m:
+                    tunnel_url = m.group(0)
+                    break
+        except Exception:
+            pass
+
+if not tunnel_url:
+    try:
+        from pycloudflared import try_cloudflare
+        t = try_cloudflare(port=8000)
+        m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", str(t))
+        if m:
+            tunnel_url = m.group(0)
+    except Exception:
+        pass
 
 print("\n" + "=" * 65)
 print(f"🚀 VeloCITI AI Engine is LIVE on NVIDIA GPU ({DEVICE})!")
 print(f"🔗 Cloudflare Tunnel URL: {tunnel_url}")
 print("=" * 65 + "\n")
+
 
 try:
     resp = requests.post("https://clear-ways.onrender.com/api/set_ai_backend", json={"url": tunnel_url}, timeout=10)

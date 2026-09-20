@@ -309,7 +309,12 @@ def run_tunnel_and_server():
 
     port = 8000
     # Start Cloudflare Tunnel
-    tunnel_url = try_cloudflare(port=port).tunnel_url
+    t = try_cloudflare(port=port)
+    tunnel_url = getattr(t, "tunnel", None) or getattr(t, "url", None) or str(t)
+    if not str(tunnel_url).startswith("http"):
+        m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", str(t))
+        if m:
+            tunnel_url = m.group(0)
     print("\n" + "=" * 65)
     print(f"🚀 VeloCITI AI Engine is LIVE on NVIDIA GPU ({DEVICE})!")
     print(f"🔗 Cloudflare Tunnel URL: {tunnel_url}")

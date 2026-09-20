@@ -122,24 +122,6 @@ export default function VehicleTrackingView({ onSwitchToTraffic, onLogout }) {
 
         {/* Action Switchers */}
         <div className="vt-actions">
-          {activeTab === "map" && (
-            <button
-              className="vt-btn"
-              style={{ background: "#dc2626", color: "#fff", border: "1px solid #ef4444", fontWeight: 700 }}
-              onClick={() => {
-                try {
-                  if (iframeRef.current && iframeRef.current.contentWindow) {
-                    iframeRef.current.contentWindow.postMessage({ type: "CLOSE_MODALS" }, "*");
-                  }
-                } catch (e) {}
-              }}
-              title="Close any open modal or inspect view and return to map (Esc)"
-            >
-              <i className="fas fa-xmark" />
-              <span>Close / Back (Esc)</span>
-            </button>
-          )}
-
           {onSwitchToTraffic && (
             <button className="vt-btn vt-traffic-btn" onClick={onSwitchToTraffic} title="Direct Switch to Urban Traffic Management">
               <i className="fas fa-traffic-light" />

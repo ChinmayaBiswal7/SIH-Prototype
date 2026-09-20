@@ -320,28 +320,18 @@ tr:hover td{background:#1a2640;cursor:pointer}
 
 <!-- UNPLATED VEHICLE VISUAL FINGERPRINT INSPECTOR MODAL -->
 <div id="modal-ghost-inspect" onclick="if(event.target===this)closeGhostInspectModal()" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(14px);z-index:2100;display:none;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;">
-  <!-- Unmissable Floating Back / Close Button -->
-  <button onclick="closeGhostInspectModal()" style="position:fixed;top:16px;right:20px;z-index:99999;background:#ef4444;color:#fff;border:2px solid #ffffffaa;border-radius:24px;padding:8px 18px;font-weight:800;font-size:0.84rem;cursor:pointer;box-shadow:0 6px 25px rgba(239,68,68,0.6);display:flex;align-items:center;gap:6px;transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-    <span>&larr;</span> <span>Back / Close (Esc)</span>
-  </button>
   <div style="background:#0f172a;border:1px solid #f472b6;border-radius:14px;max-width:820px;width:100%;box-shadow:0 25px 60px -12px rgba(219,39,119,0.35);margin:auto 0;position:relative;">
     <div style="padding:14px 20px;background:#1e293b;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between;border-top-left-radius:13px;border-top-right-radius:13px;">
       <h3 style="font-size:.95rem;font-weight:700;color:#f472b6;margin:0;display:flex;align-items:center;gap:8px;">
         <span>🚫</span> Unplated Vehicle Visual Fingerprint &amp; Multi-Camera Match Timeline
       </h3>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button onclick="closeGhostInspectModal()" style="background:#dc2626;border:none;color:#fff;font-size:0.75rem;font-weight:700;padding:5px 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:4px;">
-          &larr; Back
-        </button>
-        <button onclick="closeGhostInspectModal()" style="background:none;border:none;color:#94a3b8;font-size:1.3rem;cursor:pointer;line-height:1;" title="Close (Esc)">&#x2715;</button>
-      </div>
+      <button class="close-j-btn" onclick="closeGhostInspectModal()" style="font-size:1.3rem;" title="Close (Esc)">&#x2715;</button>
     </div>
     <div style="padding:18px;max-height:calc(85vh - 120px);overflow-y:auto;" id="ghost-inspect-body">
       <!-- Injected by openGhostInspectModal -->
     </div>
-    <div style="padding:12px 20px;background:#0b1120;border-top:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center;border-bottom-left-radius:13px;border-bottom-right-radius:13px;">
+    <div style="padding:10px 20px;background:#0b1120;border-top:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center;border-bottom-left-radius:13px;border-bottom-right-radius:13px;">
       <span style="font-size:.74rem;color:#64748b;">&#x2713; 64-Dimensional Multi-Zone Color &amp; Structural Signature Verified</span>
-      <button onclick="closeGhostInspectModal()" class="btn-sm red" style="padding:7px 18px;font-size:.8rem;font-weight:700;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;">&larr; Back to Map (Esc)</button>
     </div>
   </div>
 </div>
@@ -1209,12 +1199,7 @@ async function openGhostInspectModal(ghostId){
       <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:18px;">
         <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <b style="color:#f472b6;font-size:1.05rem;font-family:monospace">${p.ghost_id}</b>
-              <button onclick="closeGhostInspectModal()" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(239,68,68,0.4)">
-                &larr; Back (Esc)
-              </button>
-            </div>
+            <b style="color:#f472b6;font-size:1.05rem;font-family:monospace">${p.ghost_id}</b>
             <span style="background:${hex};color:#0f172a;font-weight:800;padding:2px 8px;border-radius:4px;font-size:.75rem">
               HEX: ${hex}
             </span>

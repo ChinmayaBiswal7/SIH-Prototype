@@ -303,37 +303,30 @@ async def predict_video(file: UploadFile = File(...)):
 # -----------------------------------------------------------------------------
 # Launch Cloudflare Tunnel and Auto-Sync to Render
 # -----------------------------------------------------------------------------
-def run_tunnel_and_server():
-    from pycloudflared import try_cloudflare
-    import requests
+# Start Cloudflare Tunnel & Auto-Sync to Render
+from pycloudflared import try_cloudflare
+import requests
 
-    port = 8000
-    # Start Cloudflare Tunnel
-    t = try_cloudflare(port=port)
-    tunnel_url = getattr(t, "tunnel", None) or getattr(t, "url", None) or str(t)
-    if not str(tunnel_url).startswith("http"):
-        m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", str(t))
-        if m:
-            tunnel_url = m.group(0)
-    print("\n" + "=" * 65)
-    print(f"🚀 VeloCITI AI Engine is LIVE on NVIDIA GPU ({DEVICE})!")
-    print(f"🔗 Cloudflare Tunnel URL: {tunnel_url}")
-    print("=" * 65 + "\n")
+port = 8000
+t = try_cloudflare(port=port)
+tunnel_url = getattr(t, "tunnel", None) or getattr(t, "url", None) or str(t)
+if not str(tunnel_url).startswith("http"):
+    m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", str(t))
+    if m:
+        tunnel_url = m.group(0)
 
-    # Auto-sync URL to Render
-    try:
-        render_url = "https://clear-ways.onrender.com/api/set_ai_backend"
-        resp = requests.post(render_url, json={"url": tunnel_url}, timeout=10)
-        if resp.status_code == 200:
-            print("✅ Auto-synced active GPU tunnel to Render (clear-ways.onrender.com)!")
-        else:
-            print(f"⚠️ Render response: {resp.status_code}")
-    except Exception as e:
-        print(f"⚠️ Note on auto-sync: {e}")
+print("\n" + "=" * 65)
+print(f"🚀 VeloCITI AI Engine is LIVE on NVIDIA GPU ({DEVICE})!")
+print(f"🔗 Cloudflare Tunnel URL: {tunnel_url}")
+print("=" * 65 + "\n")
 
-    import nest_asyncio
-    nest_asyncio.apply()
-    uvicorn.run(app, host="0.0.0.0", port=port)
+try:
+    resp = requests.post("https://clear-ways.onrender.com/api/set_ai_backend", json={"url": tunnel_url}, timeout=10)
+    print(f"✅ Auto-synced active GPU tunnel to Render! Status: {resp.status_code}")
+except Exception as e:
+    print(f"⚠️ Note on auto-sync: {e}")
 
-if __name__ == "__main__":
-    run_tunnel_and_server()
+# Run Uvicorn natively with Colab's running asyncio loop
+config = uvicorn.Config(app, host="0.0.0.0", port=port, loop="asyncio")
+server = uvicorn.Server(config)
+await server.serve()

@@ -23,6 +23,11 @@ _ocr_reader = None
 
 def get_ocr():
     global _ocr_reader
+    # On resource-constrained cloud containers (like Render 512MB RAM), EasyOCR's PyTorch models
+    # consume >600MB and cause OOM kernel crashes (HTTP 502). Disable on Render.
+    import os
+    if os.environ.get("RENDER") or os.environ.get("PORT"):
+        return None
     if _ocr_reader is None:
         try:
             import easyocr
@@ -443,10 +448,11 @@ def multi_pass_ocr_on_plate(img, max_passes=4):
     try:
         import pytesseract
         for ver in versions:
-            txt = pytesseract.image_to_string(ver, config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
-            p = extract_indian_plate_from_string(txt) or post_process(txt)
-            if p and 8 <= len(p) <= 10:
-                return p, 0.95
+            for psm in ['--psm 7', '--psm 8', '--psm 6']:
+                txt = pytesseract.image_to_string(ver, config=f'{psm} -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+                p = extract_indian_plate_from_string(txt) or post_process(txt)
+                if p and 8 <= len(p) <= 10:
+                    return p, 0.95
     except Exception:
         pass
 

@@ -157,15 +157,42 @@ def draw_vehicle_annotations(frame, detections):
         print(f"[Tracking API] Annotation error: {ae}")
         return frame
 
-_LIVE_AI_BACKEND_URL = os.environ.get("AI_BACKEND_URL", "https://testimony-scheme-quarterly-organisations.trycloudflare.com").strip().rstrip("/")
+_LIVE_AI_BACKEND_URL = os.environ.get("AI_BACKEND_URL", "").strip().rstrip("/")
 
 def get_ai_backend_url():
     global _LIVE_AI_BACKEND_URL
     return _LIVE_AI_BACKEND_URL
 
+def check_ai_backend_live(url):
+    """
+    Ultra-fast reachability check.
+    Uses socket.create_connection with 0.8s timeout to avoid Python requests
+    hanging on non-resolving or dead Cloudflare tunnel hostnames.
+    """
+    if not url or not url.startswith("http"):
+        return False
+    try:
+        import urllib.parse
+        import socket
+        import requests
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname
+        if not host:
+            return False
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        s = socket.create_connection((host, port), timeout=0.8)
+        s.close()
+        probe = requests.get(f"{url.rstrip('/')}/", timeout=1.2)
+        return probe.status_code == 200 and probe.json().get("status") == "online"
+    except Exception:
+        return False
+
 def get_yolo_model():
     """Initializes and returns cached YOLOv8 vehicle detection model."""
     global _upload_yolo_model
+    # On Render (512MB RAM), avoid loading heavy YOLO model in memory to prevent OOM
+    if os.environ.get("RENDER") or os.environ.get("PORT"):
+        return None
     if _upload_yolo_model is None:
         try:
             import torch
@@ -469,62 +496,52 @@ def register_tracking_routes(app):
         # ── 0. High-Speed Colab GPU Inference Delegation ─────────────────────
         ai_backend = get_ai_backend_url()
         cloud_url = None
-        if ai_backend:
+        if ai_backend and check_ai_backend_live(ai_backend):
             try:
                 import requests
-                # Fast 1.5s liveness probe: if tunnel is expired, drop immediately to local engine!
-                is_alive = False
-                try:
-                    probe = requests.get(f"{ai_backend}/", timeout=1.5)
-                    if probe.status_code == 200 and probe.json().get("status") == "online":
-                        is_alive = True
-                except Exception:
-                    is_alive = False
+                resp = requests.post(
+                    f"{ai_backend}/predict_image",
+                    files={"file": (filename, raw_bytes, "image/jpeg")},
+                    timeout=(2.0, 7.0)
+                )
+                if resp.status_code == 200:
+                    ai_data = resp.json()
+                    if ai_data.get("success"):
+                        p_plate = ai_data.get("plate_number")
+                        has_plate = ai_data.get("has_plate", bool(p_plate and p_plate not in ["NONE", "UNPLATED"]))
+                        v_type = ai_data.get("vehicle_type", "CAR")
+                        conf = float(ai_data.get("confidence", 0.94))
+                        cloud_url = ai_data.get("image_url")
+                        if cloud_url:
+                            try:
+                                import cloudinary_storage
+                                cloudinary_storage._CDN_MAP[filename] = cloud_url
+                            except Exception:
+                                pass
 
-                if is_alive:
-                    resp = requests.post(
-                        f"{ai_backend}/predict_image",
-                        files={"file": (filename, raw_bytes, "image/jpeg")},
-                        timeout=(2.0, 8.0)
-                    )
-                    if resp.status_code == 200:
-                        ai_data = resp.json()
-                        if ai_data.get("success"):
-                            p_plate = ai_data.get("plate_number")
-                            has_plate = ai_data.get("has_plate", bool(p_plate and p_plate not in ["NONE", "UNPLATED"]))
-                            v_type = ai_data.get("vehicle_type", "CAR")
-                            conf = float(ai_data.get("confidence", 0.94))
-                            cloud_url = ai_data.get("image_url")
-                            if cloud_url:
-                                try:
-                                    import cloudinary_storage
-                                    cloudinary_storage._CDN_MAP[filename] = cloud_url
-                                except Exception:
-                                    pass
+                        if has_plate and p_plate and p_plate not in ["NONE", "UNPLATED"]:
+                            p_box = ai_data.get("plate_bbox") or ai_data.get("plate_box")
+                            c_box = ai_data.get("box") or ai_data.get("bbox")
+                            plates_found.append({
+                                "plate": p_plate,
+                                "confidence": conf,
+                                "vehicle_type": v_type,
+                                "box": c_box or p_box,
+                                "plate_bbox": p_box,
+                                "plate_color": "WHITE",
+                                "category": "Private Vehicle",
+                                "violation": "NONE",
+                                "camera_id": "CAM_LIVE",
+                                "environmental_condition": "NORMAL",
+                                "quality_score": 0.96,
+                                "device": ai_data.get("device", "cuda")
+                            })
+                            print(f"[AI Backend] Real plate detected on Colab GPU: {p_plate} ({conf})")
+                        else:
+                            print(f"[AI Backend] No plate detected on vehicle on Colab GPU -> triggering Unplated Forensic Profiler")
+                            plates_found = []
 
-                            if has_plate and p_plate and p_plate not in ["NONE", "UNPLATED"]:
-                                p_box = ai_data.get("plate_bbox") or ai_data.get("plate_box")
-                                c_box = ai_data.get("box") or ai_data.get("bbox")
-                                plates_found.append({
-                                    "plate": p_plate,
-                                    "confidence": conf,
-                                    "vehicle_type": v_type,
-                                    "box": c_box or p_box,
-                                    "plate_bbox": p_box,
-                                    "plate_color": "WHITE",
-                                    "category": "Private Vehicle",
-                                    "violation": "NONE",
-                                    "camera_id": "CAM_LIVE",
-                                    "environmental_condition": "NORMAL",
-                                    "quality_score": 0.96,
-                                    "device": ai_data.get("device", "cuda")
-                                })
-                                print(f"[AI Backend] Real plate detected on Colab GPU: {p_plate} ({conf})")
-                            else:
-                                print(f"[AI Backend] No plate detected on vehicle on Colab GPU -> triggering Unplated Forensic Profiler")
-                                plates_found = []
-
-                            delegated_to_gpu = True
+                        delegated_to_gpu = True
             except Exception as e:
                 print(f"[AI Backend] Colab delegation note: {e}")
 
@@ -542,52 +559,90 @@ def register_tracking_routes(app):
             except Exception:
                 frame = None
 
-        # ── 1. Local Neural ANPR Fallback (Runs when Colab is offline/unreachable) ──
+        # ── 1. Safe Lightweight Local ANPR Fallback (Runs when Colab is offline/unreachable) ──
         if not plates_found and frame is not None:
             try:
-                import anpr as anpr_module
-                local_scans = anpr_module.scan_frame_for_plates(frame)
-                for lp in local_scans:
-                    p_clean = lp.get("plate", "").upper().replace(" ", "")
-                    if p_clean and "NO PLATE" not in p_clean and "UNREADABLE" not in p_clean:
-                        v_rto = {}
-                        try:
-                            import rto
-                            v_rto = rto.lookup_rto_vehicle(p_clean)
-                        except Exception:
-                            pass
-                        v_prof = lp.get("vehicle_profile")
-                        if not v_prof:
+                has_p, p_crop, p_cand = detect_vehicle_plate_presence(frame)
+                p_cand_box = None
+                if has_p and p_cand:
+                    bx, by, bw, bh = p_cand
+                    p_cand_box = (bx, by, bx + bw, by + bh)
+                    try:
+                        import pytesseract
+                        import anpr as anpr_module
+                        for psm in ['--psm 7', '--psm 8', '--psm 6']:
+                            raw_txt = pytesseract.image_to_string(p_crop, config=f'{psm} -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+                            p_clean = anpr_module.extract_indian_plate_from_string(raw_txt) or anpr_module.post_process(raw_txt)
+                            if p_clean and 8 <= len(p_clean) <= 10:
+                                v_rto = {}
+                                try:
+                                    import rto
+                                    v_rto = rto.lookup_rto_vehicle(p_clean)
+                                except Exception:
+                                    pass
+                                plates_found.append({
+                                    "plate": p_clean,
+                                    "confidence": 0.95,
+                                    "vehicle_type": f"{v_rto.get('vehicle_maker', '')} {v_rto.get('vehicle_model', '')}".strip() or "Car",
+                                    "box": (0, 0, frame.shape[1], frame.shape[0]),
+                                    "plate_bbox": p_cand_box,
+                                    "plate_color": "WHITE",
+                                    "category": "Private Vehicle",
+                                    "violation": "NONE",
+                                    "camera_id": "CAM_LIVE",
+                                    "environmental_condition": "NORMAL",
+                                    "quality_score": 0.95,
+                                    "vahan_details": v_rto
+                                })
+                                break
+                    except Exception:
+                        pass
+
+                if not plates_found:
+                    import anpr as anpr_module
+                    local_scans = anpr_module.scan_frame_for_plates(frame)
+                    for lp in local_scans:
+                        p_clean = lp.get("plate", "").upper().replace(" ", "")
+                        if p_clean and "NO PLATE" not in p_clean and "UNREADABLE" not in p_clean:
+                            v_rto = {}
                             try:
-                                import vehicle_profiler
-                                v_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=lp.get("vehicle_type", "Car"))
+                                import rto
+                                v_rto = rto.lookup_rto_vehicle(p_clean)
                             except Exception:
                                 pass
-                        veh_label = lp.get("vehicle_type", "Car")
-                        if v_rto.get("vehicle_maker") and v_rto.get("vehicle_model"):
-                            veh_label = f"{v_rto['vehicle_maker']} {v_rto['vehicle_model']}"
-                        elif v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
-                            veh_label = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
+                            v_prof = lp.get("vehicle_profile")
+                            if not v_prof:
+                                try:
+                                    import vehicle_profiler
+                                    v_prof = vehicle_profiler.extract_vehicle_profile(frame, vehicle_type=lp.get("vehicle_type", "Car"))
+                                except Exception:
+                                    pass
+                            veh_label = lp.get("vehicle_type", "Car")
+                            if v_rto.get("vehicle_maker") and v_rto.get("vehicle_model"):
+                                veh_label = f"{v_rto['vehicle_maker']} {v_rto['vehicle_model']}"
+                            elif v_prof and v_prof.get("estimated_make") and "Unidentified" not in v_prof["estimated_make"]:
+                                veh_label = f"{v_prof['estimated_make']} {v_prof['estimated_model']}"
 
-                        plates_found.append({
-                            "plate": p_clean,
-                            "confidence": lp.get("confidence", 0.95),
-                            "vehicle_type": veh_label,
-                            "plate_color": lp.get("plate_color", "WHITE"),
-                            "category": lp.get("category", "Private Vehicle"),
-                            "violation": "NONE",
-                            "camera_id": "CAM_LIVE",
-                            "environmental_condition": "NORMAL",
-                            "quality_score": 0.95,
-                            "vahan_details": v_rto,
-                            "vehicle_profile": v_prof,
-                            "voting_details": lp.get("voting_details", {
-                                "frames_analyzed": 1,
-                                "consensus_ratio": 0.95,
-                                "confidence_boost": "+8.5% (Local OCR Consensus)"
+                            plates_found.append({
+                                "plate": p_clean,
+                                "confidence": lp.get("confidence", 0.95),
+                                "vehicle_type": veh_label,
+                                "plate_color": lp.get("plate_color", "WHITE"),
+                                "category": lp.get("category", "Private Vehicle"),
+                                "violation": "NONE",
+                                "camera_id": "CAM_LIVE",
+                                "environmental_condition": "NORMAL",
+                                "quality_score": 0.95,
+                                "plate_bbox": p_cand_box or lp.get("plate_bbox"),
+                                "vahan_details": v_rto,
+                                "vehicle_profile": v_prof,
+                                "voting_details": lp.get("voting_details", {
+                                    "frames_analyzed": 1,
+                                    "consensus_ratio": 0.95,
+                                    "confidence_boost": "+8.5% (Local OCR Consensus)"
+                                })
                             })
-                        })
-                        print(f"[Tracking API] Local OCR Fallback detected plate: {p_clean}")
+                            print(f"[Tracking API] Local OCR Fallback detected plate: {p_clean}")
             except Exception as le:
                 print(f"[Tracking API] Local OCR Fallback note: {le}")
 
@@ -931,24 +986,15 @@ def register_tracking_routes(app):
             colab_video_done = False
 
             # ── 1. Fast Path: High-Speed Colab GPU Video Processing ──
-            if ai_backend and os.path.exists(temp_vpath):
+            if ai_backend and os.path.exists(temp_vpath) and check_ai_backend_live(ai_backend):
                 try:
                     import requests
-                    v_alive = False
-                    try:
-                        v_probe = requests.get(f"{ai_backend}/", timeout=1.5)
-                        if v_probe.status_code == 200:
-                            v_alive = True
-                    except Exception:
-                        v_alive = False
-
-                    if v_alive:
-                        with open(temp_vpath, "rb") as vf:
-                            v_resp = requests.post(
-                                f"{ai_backend}/predict_video",
-                                files={"file": (f"upload_{job_id}.mp4", vf, "video/mp4")},
-                                timeout=(2.5, 15)
-                            )
+                    with open(temp_vpath, "rb") as vf:
+                        v_resp = requests.post(
+                            f"{ai_backend}/predict_video",
+                            files={"file": (f"upload_{job_id}.mp4", vf, "video/mp4")},
+                            timeout=(2.5, 15)
+                        )
                         if v_resp.status_code == 200:
                             v_json = v_resp.json()
                             if v_json.get("success") and v_json.get("vehicles"):
@@ -1117,14 +1163,36 @@ def register_tracking_routes(app):
                                 _video_jobs[job_id]["progress"] = min(90, pct)
 
                         try:
-                            yolo = get_yolo_model()
                             plates = []
-                            if yolo is not None:
+                            has_p, p_crop, p_cand = detect_vehicle_plate_presence(frame)
+                            if has_p and p_crop is not None:
+                                bx, by, bw, bh = p_cand
                                 try:
-                                    results = yolo(frame, conf=0.18, verbose=False)
-                                    plates = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
+                                    import pytesseract
+                                    txt = pytesseract.image_to_string(p_crop, config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+                                    t_p = anpr_module.extract_indian_plate_from_string(txt) or anpr_module.post_process(txt)
+                                    if t_p and 8 <= len(t_p) <= 10:
+                                        plates.append({
+                                            "plate": t_p,
+                                            "confidence": 0.95,
+                                            "vehicle_type": "Car",
+                                            "box": (0, 0, frame.shape[1], frame.shape[0]),
+                                            "plate_bbox": (bx, by, bx + bw, by + bh),
+                                            "plate_color": "WHITE",
+                                            "category": "Private Vehicle",
+                                            "violation": "NONE"
+                                        })
                                 except Exception:
                                     pass
+
+                            if not plates:
+                                yolo = get_yolo_model()
+                                if yolo is not None:
+                                    try:
+                                        results = yolo(frame, conf=0.18, verbose=False)
+                                        plates = anpr_module.detect_plates_in_frame(frame, results, fast_mode=True)
+                                    except Exception:
+                                        pass
                             if not plates or all(p.get("violation") == "MISSING_OR_COVERED_PLATE" for p in plates):
                                 plates = anpr_module.scan_frame_for_plates(frame)
 

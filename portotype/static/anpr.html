@@ -201,6 +201,9 @@ html,body{width:100%;height:100%;background:#020617;color:#f8fafc;font-family:-a
 
       <!-- CLEAR SCAN & RESET DB -->
       <button class="btn danger" onclick="clearLiveScan()" title="Clear backend DB & reset scan"><i class="fa-solid fa-broom"></i> Clear Scan</button>
+
+      <!-- GPU TUNNEL CONFIG -->
+      <button class="btn" id="btn-colab-link" onclick="promptBackendUrl()" style="background:#0f172a;border-color:#38bdf8;color:#38bdf8" title="Connect Google Colab GPU"><i class="fa-solid fa-server"></i> GPU Tunnel</button>
     </div>
   </header>
 
@@ -753,6 +756,29 @@ async function clearLiveScan(){
   resetPlaceholder();
   const img = document.getElementById('live-img');
   if(img){ img.src = ''; img.style.display = 'none'; }
+}
+
+async function promptBackendUrl(){
+  let current = '';
+  try {
+    const r = await fetch(API + '/api/set_ai_backend');
+    const j = await r.json();
+    current = j.ai_backend || '';
+  } catch(e){}
+  const val = prompt('Enter your Google Colab Cloudflare URL (e.g. https://xxxx.trycloudflare.com):\n\nLeave blank to run on Render Local Engine.', current);
+  if(val !== null){
+    try {
+      const res = await fetch(API + '/api/set_ai_backend', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: val.trim()})
+      });
+      const data = await res.json();
+      alert('GPU Backend updated successfully!\nTarget: ' + (data.ai_backend || 'Local Mode'));
+    } catch(err){
+      alert('Error updating GPU tunnel: ' + err.message);
+    }
+  }
 }
 
 async function uploadImageFile(input){

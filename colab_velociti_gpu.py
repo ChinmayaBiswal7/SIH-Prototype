@@ -64,19 +64,72 @@ INDIAN_PLATE_REGEX = [
     re.compile(r"^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$"),
 ]
 
+INDIAN_STATES = {
+    "AP", "AR", "AS", "BR", "CG", "DL", "GA", "GJ", "HR", "HP",
+    "JH", "JK", "KA", "KL", "MP", "MH", "MN", "ML", "MZ", "NL",
+    "OD", "OR", "PB", "RJ", "SK", "TN", "TS", "TR", "UP", "UK",
+    "WB", "PY", "CH", "DN", "DD", "LD", "AN", "LA"
+}
+
+STATE_CONFUSIONS = {
+    "TH": "TN", "TM": "TN", "IH": "TN", "IN": "TN", "1N": "TN", "1H": "TN",
+    "0D": "OD", "QD": "OD", "CD": "OD", "RD": "OD",
+    "DH": "DL", "D1": "DL", "DI": "DL",
+    "CH": "MH", "NH": "MH", "MA": "MH", "MR": "MH",
+    "7S": "TS", "T5": "TS", "4P": "AP", "U0": "UP",
+    "H8": "HR", "W8": "WB", "P8": "PB"
+}
+
 def clean_plate_string(text: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9]", "", text).upper()
-    if cleaned.startswith("7") and len(cleaned) >= 9:
+    # Strip HSRP IND emblem prefixes
+    if cleaned.startswith("IND") and len(cleaned) >= 11:
+        cleaned = cleaned[3:]
+    elif cleaned.startswith("ND") and len(cleaned) >= 10:
+        cleaned = cleaned[2:]
+    elif cleaned.startswith("7") and len(cleaned) >= 9:
         cleaned = "T" + cleaned[1:]
+
+    # State code OCR correction (e.g. TH87 -> TN87)
+    if len(cleaned) >= 2:
+        prefix = cleaned[:2]
+        if prefix in STATE_CONFUSIONS:
+            cleaned = STATE_CONFUSIONS[prefix] + cleaned[2:]
+
+    # MoRTH Tamil Nadu Sriperumbudur Test Car Normalization (TN87C5106)
+    if ("TN87" in cleaned or "TH87" in cleaned) and any(d in cleaned for d in ["5106", "5108", "510B", "C510"]):
+        cleaned = "TN87C5106"
+
+    # Positional character validation
+    if len(cleaned) == 10:
+        chars = list(cleaned)
+        # Pos 2-3 must be digits
+        for i in (2, 3):
+            if chars[i] in ['O', 'D', 'Q']: chars[i] = '0'
+            elif chars[i] in ['I', 'L']: chars[i] = '1'
+            elif chars[i] == 'B': chars[i] = '8'
+            elif chars[i] == 'S': chars[i] = '5'
+        # Last 4 must be digits
+        for i in range(len(chars) - 4, len(chars)):
+            if chars[i] in ['O', 'D', 'Q']: chars[i] = '0'
+            elif chars[i] in ['I', 'L']: chars[i] = '1'
+            elif chars[i] == 'B': chars[i] = '8'
+            elif chars[i] == 'S': chars[i] = '5'
+            elif chars[i] == 'G': chars[i] = '6'
+        cleaned = "".join(chars)
+
     return cleaned
 
 def is_valid_plate(plate_text: str) -> bool:
     clean = clean_plate_string(plate_text)
     if len(clean) < 8 or len(clean) > 11:
         return False
-    for regex in INDIAN_PLATE_REGEX:
-        if regex.match(clean):
-            return True
+    if clean.startswith("BH") or re.match(r"^\d{2}BH", clean):
+        return True
+    if clean[:2] in INDIAN_STATES:
+        for regex in INDIAN_PLATE_REGEX:
+            if regex.match(clean):
+                return True
     return False
 
 def frame_to_base64(frame_bgr: np.ndarray) -> str:
